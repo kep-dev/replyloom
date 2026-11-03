@@ -100,19 +100,23 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the pieces fit together.
 
 **Prerequisites:** a Cloudflare account (the free tier is enough to try it), Node 22.13+, and pnpm 11 (`corepack enable`).
 
-```bash
-git clone https://github.com/thareekanvar/replyloom.git && cd replyloom
-pnpm install
-pnpm exec wrangler login
+This fork installs native development tools for **Windows x64 only**. Run the
+commands below in **Git Bash**, which is included with Git for Windows. CI also
+uses Windows runners. Hosting still runs on Cloudflare.
 
-pnpm setup     # creates D1, R2, Queue, Vectorize, KV; applies migrations; generates secrets
+```bash
+git clone https://github.com/kep-dev/replyloom.git && cd replyloom
+pnpm install
+pnpm --filter worker exec wrangler login
+
+pnpm run setup # creates D1, R2, Queue, Vectorize, KV; applies migrations; generates secrets
 ```
 
 Then, before the first deploy:
 
 1. `pnpm install` created your local, gitignored config from the templates: `apps/web/wrangler.jsonc`, `apps/worker/wrangler.jsonc` and `apps/web/.env.production` (`pnpm setup` has already written your D1/KV ids into them). Set the URLs to **your** domains: `BETTER_AUTH_URL` (web), `CORS_ORIGIN` (worker) and `VITE_ENGINE_URL` (web `wrangler.jsonc` + `.env.production`). Edit these files, never the `*.example` templates.
 2. Optional: set `RESEND_API_KEY` on `apps/web` so invitation emails are actually sent, and `SENTRY_DSN` (both Workers) / `VITE_SENTRY_DSN` (`.env.production`) for error reporting. Sentry is off unless you set these.
-3. `pnpm deploy`. It refuses to run while template placeholders are still in your config.
+3. `pnpm run deploy`. It refuses to run while template placeholders are still in your config.
 4. Open the app, sign up (you get a personal workspace), go to **Integrations**, add a session and scan the QR code with *WhatsApp → Linked devices*.
 
 Both scripts are idempotent. [DEPLOY.md](./DEPLOY.md) covers every step by hand, plus multiple environments, backups, custom domains and monitoring.

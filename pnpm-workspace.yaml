@@ -2,12 +2,11 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Native development tools target Windows x64 (including CI).
 supportedArchitectures:
   os:
-    - darwin
-    - linux
+    - win32
   cpu:
-    - arm64
     - x64
 
 allowBuilds:

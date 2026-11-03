@@ -1,0 +1,3 @@
+# Keep executable script headers compatible with Bash and the test runner on Windows.
+*.sh text eol=lf
+*.mjs text eol=lf

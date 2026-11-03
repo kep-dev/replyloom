@@ -5,6 +5,10 @@ name: CI
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 on:
   push:
     branches: [main]
@@ -14,7 +18,7 @@ on:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -31,7 +35,7 @@ jobs:
 
   typecheck:
     name: Typecheck
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -48,7 +52,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -62,7 +66,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: [lint, typecheck, test]
     steps:
       - uses: actions/checkout@v7
@@ -76,7 +80,7 @@ jobs:
 
   check-patches:
     name: Check Baileys patches
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -89,7 +93,7 @@ jobs:
 
   deploy:
     name: Deploy
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: [build, check-patches]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production

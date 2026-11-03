@@ -1,5 +1,9 @@
 name: D1 Backup
 
+defaults:
+  run:
+    shell: bash
+
 # Nightly encrypted export of the production D1 database to R2, since D1 has no
 # built-in automatic backups (see DEPLOY.md). Runs independently of the
 # CI/deploy pipeline so a failing app build never blocks a backup.
@@ -11,7 +15,7 @@ on:
 jobs:
   backup:
     name: Export D1 to R2
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     environment: production
     steps:
       - uses: actions/checkout@v7
