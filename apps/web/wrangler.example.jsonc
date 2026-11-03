@@ -5,7 +5,9 @@
 // the CLOUDFLARE_ACCOUNT_ID env var.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "whatsapp-ai-web",
+  "name": "replyloom-web",
+  "workers_dev": true,
+  "preview_urls": false,
   "compatibility_date": "2026-10-19",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
@@ -15,7 +17,7 @@
   "services": [
     // Keep the worker service local during development. The worker's
     // Vectorize bindings are configured as remote below in its own config.
-    { "binding": "replyloom_wa_worker", "service": "wa-cf-poc" }
+    { "binding": "replyloom_wa_worker", "service": "replyloom-engine" }
   ],
   // Same physical D1 database as apps/worker — keep both ids in sync.
   // D1 is "remote" (not the default local sqlite emulation) so apps/web and
@@ -27,10 +29,10 @@
   // production. This does mean local dev reads/writes your actual D1
   // database, not an isolated local copy.
   "d1_databases": [
-    { "binding": "replyloom_db", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
+    { "binding": "replyloom_db", "database_name": "replyloom_db", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
   "r2_buckets": [
-    { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media" }
+    { "binding": "replyloom_media", "bucket_name": "replyloom-media" }
   ],
   "vars": {
     // Public base URL Better Auth uses for cookies/redirects. BETTER_AUTH_SECRET

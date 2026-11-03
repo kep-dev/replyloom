@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const webDir = join(root, "apps/web");
-const DB = "whatsapp-ai";
+const DB = "replyloom_db";
 
 const args = process.argv.slice(2);
 const emailArg = args.includes("--email") ? args[args.indexOf("--email") + 1] : null;

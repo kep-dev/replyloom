@@ -42,10 +42,10 @@ jobs:
             echo "::error::BACKUP_ENCRYPTION_KEY secret is not set; refusing to upload an unencrypted database backup."
             exit 1
           fi
-          BUCKET="${BACKUP_R2_BUCKET:-whatsapp-ai-backups}"
+          BUCKET="${BACKUP_R2_BUCKET:-replyloom-backups}"
           FILE="d1-$(date +%Y%m%d-%H%M%S).sql"
           trap 'rm -f "$FILE" "$FILE.enc"' EXIT
-          pnpm exec wrangler d1 export whatsapp-ai --remote --output "$FILE"
+          pnpm exec wrangler d1 export replyloom_db --remote --output "$FILE"
           node ../../scripts/config.mjs --encrypt-file "$FILE" "$FILE.enc"
           # Dedicated bucket, never bound to a Worker. Create it and its
           # expiry rule on first run; both are no-ops once they exist.

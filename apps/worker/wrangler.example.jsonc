@@ -5,7 +5,9 @@
 // the CLOUDFLARE_ACCOUNT_ID env var.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "wa-cf-poc",
+  "name": "replyloom-engine",
+  "workers_dev": true,
+  "preview_urls": false,
   "main": "src/index.ts",
   "compatibility_date": "2026-10-19",
   "compatibility_flags": ["nodejs_compat"],
@@ -28,17 +30,24 @@
   },
   "durable_objects": {
     "bindings": [
-      { "name": "replyloom_whatsapp_session", "class_name": "WhatsAppSession" },
-      { "name": "replyloom_scheduler", "class_name": "Scheduler" }
+      { "name": "replyloom_whatsapp_session", "class_name": "replyloom_whatsapp_session" },
+      { "name": "replyloom_scheduler", "class_name": "replyloom_scheduler" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["WhatsAppSession"] },
-    // Stateless DO (reads due-work out of D1, never stores DO-local state).
-    { "tag": "v2", "new_classes": ["Scheduler"] }
+    // Alarm-driven scheduler reads due work from D1; new namespaces use SQLite.
+    { "tag": "v2", "new_sqlite_classes": ["Scheduler"] },
+    {
+      "tag": "v3-replyloom-resource-names",
+      "renamed_classes": [
+        { "from": "WhatsAppSession", "to": "replyloom_whatsapp_session" },
+        { "from": "Scheduler", "to": "replyloom_scheduler" }
+      ]
+    }
   ],
   // Shared with apps/web — both Workers must point at the SAME database_id.
-  // Create it once with `wrangler d1 create whatsapp-ai` after `wrangler login`,
+  // Create it once with `wrangler d1 create replyloom_db` after `wrangler login`,
   // then paste the id here and in apps/web/wrangler.jsonc.
   // D1 is "remote" (not the default local sqlite emulation) so apps/web and
   // apps/worker -- two separate local processes -- see the SAME database in
@@ -49,20 +58,20 @@
   // production. This does mean local dev reads/writes your actual D1
   // database, not an isolated local copy.
   "d1_databases": [
-    { "binding": "replyloom_db", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
+    { "binding": "replyloom_db", "database_name": "replyloom_db", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
   "r2_buckets": [
-    { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media" }
+    { "binding": "replyloom_media", "bucket_name": "replyloom-media" }
   ],
   // Anti-ban broadcast dispatch: each recipient is enqueued once with a
   // staggered delaySeconds (see src/broadcast.ts) instead of blasting the
-  // whole list at once. Create once with `wrangler queues create wa-broadcast-dispatch`.
+  // whole list at once. Create once with `wrangler queues create replyloom-broadcast-dispatch`.
   "queues": {
     "producers": [
-      { "queue": "wa-broadcast-dispatch", "binding": "replyloom_broadcast_queue" }
+      { "queue": "replyloom-broadcast-dispatch", "binding": "replyloom_broadcast_queue" }
     ],
     "consumers": [
-      { "queue": "wa-broadcast-dispatch", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 5 }
+      { "queue": "replyloom-broadcast-dispatch", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 5 }
     ]
   },
   // Recovery sweep only: scheduled_messages / scheduled campaigns / webhook
@@ -76,21 +85,21 @@
   // Semantic search over message history: bge-m3 embeddings (Workers AI)
   // upserted into a Vectorize index as each message is synced. Create the
   // index once with:
-  //   wrangler vectorize create wa-messages --dimensions=1024 --metric=cosine
+  //   wrangler vectorize create replyloom-messages --dimensions=1024 --metric=cosine
   "ai": {
     "binding": "replyloom_ai"
   },
   "vectorize": [
-    { "binding": "replyloom_vectorize", "index_name": "wa-messages", "remote": true },
+    { "binding": "replyloom_vectorize", "index_name": "replyloom-messages", "remote": true },
     // AI agent grounding (RAG): doc chunks embedded with bge-m3 (1024-dim,
     // cosine) and filtered per workspace. Create once with:
-    //   wrangler vectorize create wa-docs --dimensions=1024 --metric=cosine
-    { "binding": "replyloom_agent_vectorize", "index_name": "wa-docs", "remote": true }
+    //   wrangler vectorize create replyloom-docs --dimensions=1024 --metric=cosine
+    { "binding": "replyloom_agent_vectorize", "index_name": "replyloom-docs", "remote": true }
   ],
   // Cheap per-message cache for the AI agent: exact-match FAQ answers (so
   // repeated questions cost ~0 tokens) and a short-lived copy of each
   // workspace's agent config. Create once with:
-  //   wrangler kv namespace create REPLY_CACHE --binding replyloom_reply_cache
+  //   wrangler kv namespace create replyloom_reply_cache --binding replyloom_reply_cache
   // then paste the returned id below (pnpm setup does this for you).
   "kv_namespaces": [
     { "binding": "replyloom_reply_cache", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }

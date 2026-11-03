@@ -4,7 +4,7 @@
 export interface AgentEnv {
   replyloom_ai: Ai;
   replyloom_db: D1Database;
-  replyloom_agent_vectorize: VectorizeIndex; // wa-docs: grounding vectors for the agent
+  replyloom_agent_vectorize: VectorizeIndex; // replyloom-docs: grounding vectors for the agent
   replyloom_reply_cache: KVNamespace; // cheap answer + short-lived config cache
   /**
    * AI Gateway id to route model calls through (defaults to the account's

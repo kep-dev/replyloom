@@ -28,8 +28,8 @@ import { readJson } from "./json";
 import * as Sentry from "@sentry/cloudflare";
 import { scrubSentryEvent } from "@workspace/db/sentry-scrub";
 
-export { WhatsAppSession } from "./session/whatsapp-session";
-export { Scheduler } from "./scheduler";
+export { WhatsAppSession as replyloom_whatsapp_session } from "./session/whatsapp-session";
+export { Scheduler as replyloom_scheduler } from "./scheduler";
 
 /**
  * Reads just the `to` field off a /session/:id/send* request without

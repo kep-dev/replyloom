@@ -18,7 +18,7 @@ pnpm --filter worker test                  # vitest (includes real-SQLite integr
 pnpm --filter web test
 pnpm --filter @workspace/db generate       # drizzle-kit migration after schema change
 bash scripts/check-patches.sh              # Baileys patch still applies
-cd apps/web && npx wrangler d1 migrations apply whatsapp-ai --local
+cd apps/web && npx wrangler d1 migrations apply replyloom_db --local
 ```
 
 Before calling a change done, run typecheck, lint and the tests for every package you touched. CI runs lint, typecheck, test, build and check-patches.
@@ -52,7 +52,7 @@ Before calling a change done, run typecheck, lint and the tests for every packag
 - After any (hand-written or generated) migration, apply it to the local D1 database before the app works:
   ```bash
   cd apps/web
-  npx wrangler d1 migrations apply whatsapp-ai --local
+  npx wrangler d1 migrations apply replyloom_db --local
   ```
   Add `--remote` when deploying.
 

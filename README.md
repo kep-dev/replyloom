@@ -135,7 +135,7 @@ pnpm install
 cp apps/web/.dev.vars.example apps/web/.dev.vars        # fill in the values
 cp apps/worker/.dev.vars.example apps/worker/.dev.vars  # secrets must match web's
 
-cd apps/web && npx wrangler d1 migrations apply whatsapp-ai --local && cd ../..
+cd apps/web && npx wrangler d1 migrations apply replyloom_db --local && cd ../..
 pnpm dev       # web on :3000, engine on :8787
 ```
 

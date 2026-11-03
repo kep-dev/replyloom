@@ -43,7 +43,7 @@ The two apps are **separate Workers on purpose**: you can deploy or roll back th
 | **Durable Object SQLite** | Per-number Baileys auth state (`wa_creds`, `wa_keys`) and per-session counters (pace buckets, daily caps). |
 | **R2** (`replyloom_media`) | Inbound/outbound media and the media library. |
 | **Queues** (`replyloom_broadcast_queue`) | Broadcast dispatch, one message per recipient batch, with delays. |
-| **Vectorize** | `wa-messages` (semantic message search) and `wa-docs` (AI agent knowledge), 1024-dim `@cf/baai/bge-m3`. |
+| **Vectorize** | `replyloom-messages` (semantic message search) and `replyloom-docs` (AI agent knowledge), 1024-dim `@cf/baai/bge-m3`. |
 | **KV** (`replyloom_reply_cache`) | AI agent answer cache, config cache and per-conversation rate limits. |
 
 ## Main flows
@@ -71,7 +71,7 @@ A single `Scheduler` DO sets one alarm for the soonest pending item (scheduled m
 The browser asks the web app for a short-lived **HMAC token** (`WS_TOKEN_SECRET`), then opens a WebSocket straight to the engine at `/session/:id/ws`. The DO pushes messages, receipts, QR codes, connection state and campaign progress. **The app never polls.** All live updates go over this socket and patch the TanStack Query cache.
 
 ### AI agent (optional)
-`ai-agent/`: intent gate → RAG over `wa-docs` → tool calls (customer lookup, recent conversation, deals, your webhooks) → grounded reply, or a hand-off to the human queue. Guardrails block coding requests and secret leaks and redact credentials. All model calls go through **AI Gateway**, tagged per workspace, with a fallback model.
+`ai-agent/`: intent gate → RAG over `replyloom-docs` → tool calls (customer lookup, recent conversation, deals, your webhooks) → grounded reply, or a hand-off to the human queue. Guardrails block coding requests and secret leaks and redact credentials. All model calls go through **AI Gateway**, tagged per workspace, with a fallback model.
 
 ## Security model
 

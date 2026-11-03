@@ -13,7 +13,7 @@ node scripts/config.mjs --check
 # CLOUDFLARE_ACCOUNT_ID=<your account id> before running this script.
 
 echo "==> Applying any new D1 migrations..."
-(cd apps/worker && CI=true pnpm exec wrangler d1 migrations apply whatsapp-ai --remote)
+(cd apps/worker && CI=true pnpm exec wrangler d1 migrations apply replyloom_db --remote)
 
 echo "==> Checking Baileys patches..."
 bash scripts/check-patches.sh || {

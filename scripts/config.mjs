@@ -20,7 +20,7 @@
 //                                      AES-256-GCM (PBKDF2-SHA256, 600,000
 //                                      iterations via BACKUP_ENCRYPTION_KEY)
 //                                      and synced to a dedicated restricted R2
-//                                      bucket (`whatsapp-ai-backups`):
+//                                      bucket (`replyloom-backups`):
 //                                        r2://<CONFIG_R2_BUCKET>/config/config.json.enc
 // `node scripts/config.mjs --encrypt-file <in> <out>`
 // `node scripts/config.mjs --decrypt-file <in> <out>`
@@ -109,8 +109,8 @@ const FILES = [
 // (which have no template — they're created by hand once).
 const BACKUP_FILES = [...FILES.map(([, dst]) => dst), "apps/web/.dev.vars", "apps/worker/.dev.vars"];
 const BACKUP_DIR = process.env.CONFIG_BACKUP_DIR ?? join(root, ".config-backup");
-// Dedicated restricted bucket separate from the Worker's media bucket (`whatsapp-ai-media`).
-const R2_BUCKET = process.env.CONFIG_R2_BUCKET ?? process.env.BACKUP_R2_BUCKET ?? "whatsapp-ai-backups";
+// Dedicated restricted bucket separate from the Worker's media bucket (`replyloom-media`).
+const R2_BUCKET = process.env.CONFIG_R2_BUCKET ?? process.env.BACKUP_R2_BUCKET ?? "replyloom-backups";
 const LEGACY_R2_BUCKET = "whatsapp-ai-media";
 const R2_KEY = "config/config.json";
 const LEGACY_ENC_R2_KEY = "config/config.json.enc";

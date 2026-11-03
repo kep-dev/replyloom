@@ -25,6 +25,25 @@ Resource binding names use the `replyloom_` prefix, for example `replyloom_db`,
 the code through `env`. The target resource is selected separately by its
 database id, bucket name, queue name, or Worker name in the config.
 
+Cloudflare dashboard resources use these names:
+
+| Resource | Name |
+|---|---|
+| CRM Worker | `replyloom-web` |
+| Engine Worker | `replyloom-engine` |
+| D1 database | `replyloom_db` |
+| Media / backup R2 buckets | `replyloom-media` / `replyloom-backups` |
+| Broadcast Queue | `replyloom-broadcast-dispatch` |
+| Search / knowledge Vectorize indexes | `replyloom-messages` / `replyloom-docs` |
+| KV namespace | `replyloom_reply_cache` |
+| Durable Object classes | `replyloom_whatsapp_session` / `replyloom_scheduler` |
+
+Changing a resource name in Wrangler does not rename the existing resource.
+For an existing install, migrate its data and update both Workers before
+removing old storage. The `v3-replyloom-resource-names` Durable Object migration
+renames the existing classes while preserving their namespace IDs and stored
+WhatsApp credentials.
+
 **Backup / restore.** So you never have to set this up again on the same machine:
 
 ```bash
@@ -35,21 +54,21 @@ pnpm config:restore   # copies them back, only where a local file is missing
 
 `pnpm install` also auto-restores from that backup before falling back to templates.
 
-**Cloudflare (R2) sync — cross-machine, encrypted & isolated.** The same two commands take `--cloud` to encrypt the backup client-side (`AES-256-GCM`, `PBKDF2-SHA256` 600,000 iterations via `BACKUP_ENCRYPTION_KEY`) and sync it to a dedicated restricted R2 bucket (`whatsapp-ai-backups`, separate from the Worker's `whatsapp-ai-media` bucket and never bound to any Worker):
+**Cloudflare (R2) sync — cross-machine, encrypted & isolated.** The same two commands take `--cloud` to encrypt the backup client-side (`AES-256-GCM`, `PBKDF2-SHA256` 600,000 iterations via `BACKUP_ENCRYPTION_KEY`) and sync it to a dedicated restricted R2 bucket (`replyloom-backups`, separate from the Worker's `replyloom-media` bucket and never bound to any Worker):
 
 ```bash
 export BACKUP_ENCRYPTION_KEY="your-strong-passphrase-at-least-12-chars"
-pnpm config:backup --cloud    # local backup + AES-256-GCM upload to r2://whatsapp-ai-backups/config/config.json.enc
+pnpm config:backup --cloud    # local backup + AES-256-GCM upload to r2://replyloom-backups/config/config.json.enc
 pnpm config:restore --cloud   # download + decrypt from R2, then restore missing local files
 ```
 
-On a new machine: `pnpm exec wrangler login`, export `BACKUP_ENCRYPTION_KEY`, then `pnpm config:restore --cloud` — done, no re-entry. The bucket defaults to `whatsapp-ai-backups` created by `pnpm setup` (override with `CONFIG_R2_BUCKET`).
+On a new machine: `pnpm exec wrangler login`, export `BACKUP_ENCRYPTION_KEY`, then `pnpm config:restore --cloud` — done, no re-entry. The bucket defaults to `replyloom-backups` created by `pnpm setup` (override with `CONFIG_R2_BUCKET`).
 
 Keep `BACKUP_ENCRYPTION_KEY` somewhere outside the backup (a password manager, plus the GitHub Actions secret). If its only copy is inside `.dev.vars`, it is locked inside the encrypted backup and you can't restore on a new machine. `--backup --cloud` refuses to upload without a key; pass `--allow-unencrypted` only if you really want a plain-text copy of your secrets in R2.
 
 **GitHub Actions deploy & backup.** CI renders the three files with `node scripts/config.mjs --from-env`. Add these under Settings → Secrets and variables → Actions:
 - Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `D1_DATABASE_ID`, `KV_NAMESPACE_ID`, `BACKUP_ENCRYPTION_KEY`
-- Variables: `APP_URL` (CRM origin), `ENGINE_URL` (engine Worker URL), `SENTRY_DSN` (optional), `BACKUP_R2_BUCKET` (optional, default `whatsapp-ai-backups`), `BACKUP_RETENTION_DAYS` (optional, default `30`)
+- Variables: `APP_URL` (CRM origin), `ENGINE_URL` (engine Worker URL), `SENTRY_DSN` (optional), `BACKUP_R2_BUCKET` (optional, default `replyloom-backups`), `BACKUP_RETENTION_DAYS` (optional, default `30`)
 
 The deploy job skips cleanly when any of these is missing, for example on forks. The nightly D1 backup uses the same values.
 
@@ -57,11 +76,11 @@ The deploy job skips cleanly when any of these is missing, for example on forks.
 
 Runs `scripts/setup.sh`, which is idempotent (safe to re-run; it reuses anything that already exists):
 
-1. **D1 database** — creates `whatsapp-ai` if `apps/worker/wrangler.jsonc`'s `database_id` is still the placeholder, and writes the real id into both `apps/worker/wrangler.jsonc` and `apps/web/wrangler.jsonc` (they must point at the *same* database).
-2. **R2 bucket** — creates `whatsapp-ai-media` for message media.
-3. **Queue** — creates `wa-broadcast-dispatch`, used to stagger broadcast sends with randomized delays.
-4. **Vectorize indexes** — creates `wa-messages` (message search) and `wa-docs` (AI agent grounding), both 1024 dimensions, cosine similarity — matching the `@cf/baai/bge-m3` embedding model. Both also get a string metadata index on `workspaceId`, required for tenant-scoped search and RAG filtering before vectors are inserted.
-5. **KV namespace** — creates `REPLY_CACHE` for the AI agent's exact-match answer cache + short-lived config cache, and writes its id into `apps/worker/wrangler.jsonc`.
+1. **D1 database** — creates `replyloom_db` if `apps/worker/wrangler.jsonc`'s `database_id` is still the placeholder, and writes the real id into both `apps/worker/wrangler.jsonc` and `apps/web/wrangler.jsonc` (they must point at the *same* database).
+2. **R2 bucket** — creates `replyloom-media` for message media.
+3. **Queue** — creates `replyloom-broadcast-dispatch`, used to stagger broadcast sends with randomized delays.
+4. **Vectorize indexes** — creates `replyloom-messages` (message search) and `replyloom-docs` (AI agent grounding), both 1024 dimensions, cosine similarity — matching the `@cf/baai/bge-m3` embedding model. Both also get a string metadata index on `workspaceId`, required for tenant-scoped search and RAG filtering before vectors are inserted.
+5. **KV namespace** — creates `replyloom_reply_cache` for the AI agent's exact-match answer cache + short-lived config cache, and writes its id into `apps/worker/wrangler.jsonc`.
 6. **D1 migrations** — applies everything in `packages/db/migrations` to the remote database.
 7. **Secrets** — generates `BETTER_AUTH_SECRET` (web), plus `WS_TOKEN_SECRET` and `ENGINE_INTERNAL_SECRET` (same value on both Workers), if they aren't already set.
 
@@ -84,15 +103,15 @@ If you'd rather not run the scripts (e.g. wiring this into your own CI):
 
 ```bash
 # From apps/worker/
-wrangler d1 create whatsapp-ai                          # copy the database_id into both wrangler.jsonc files
-wrangler r2 bucket create whatsapp-ai-media
-wrangler queues create wa-broadcast-dispatch
-wrangler vectorize create wa-messages --dimensions=1024 --metric=cosine
-wrangler vectorize create wa-docs --dimensions=1024 --metric=cosine
-wrangler vectorize create-metadata-index wa-messages --propertyName=workspaceId --type=string
-wrangler vectorize create-metadata-index wa-docs --propertyName=workspaceId --type=string
-wrangler kv namespace create REPLY_CACHE --binding replyloom_reply_cache # copy the id into apps/worker/wrangler.jsonc
-wrangler d1 migrations apply whatsapp-ai --remote
+wrangler d1 create replyloom_db                          # copy the database_id into both wrangler.jsonc files
+wrangler r2 bucket create replyloom-media
+wrangler queues create replyloom-broadcast-dispatch
+wrangler vectorize create replyloom-messages --dimensions=1024 --metric=cosine
+wrangler vectorize create replyloom-docs --dimensions=1024 --metric=cosine
+wrangler vectorize create-metadata-index replyloom-messages --propertyName=workspaceId --type=string
+wrangler vectorize create-metadata-index replyloom-docs --propertyName=workspaceId --type=string
+wrangler kv namespace create replyloom_reply_cache --binding replyloom_reply_cache # copy the id into apps/worker/wrangler.jsonc
+wrangler d1 migrations apply replyloom_db --remote
 
 # From apps/web/
 wrangler secret put BETTER_AUTH_SECRET                  # paste a random 32+ byte value
@@ -118,26 +137,26 @@ Add env blocks to both `apps/worker/wrangler.jsonc` and `apps/web/wrangler.jsonc
 
   "env": {
     "staging": {
-      "name": "wa-cf-poc-staging",
+      "name": "replyloom-engine-staging",
       "vars": { "CORS_ORIGIN": "https://staging.yourdomain.com" },
       "d1_databases": [
-        { "binding": "replyloom_db", "database_name": "whatsapp-ai-staging", "database_id": "<staging-db-id>" }
+        { "binding": "replyloom_db", "database_name": "replyloom_db-staging", "database_id": "<staging-db-id>" }
       ],
       "r2_buckets": [
-        { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media-staging" }
+        { "binding": "replyloom_media", "bucket_name": "replyloom-media-staging" }
       ],
       "kv_namespaces": [
         { "binding": "replyloom_reply_cache", "id": "<staging-kv-id>" }
       ]
     },
     "production": {
-      "name": "wa-cf-poc-production",
+      "name": "replyloom-engine-production",
       "vars": { "CORS_ORIGIN": "https://app.yourdomain.com" },
       "d1_databases": [
-        { "binding": "replyloom_db", "database_name": "whatsapp-ai-production", "database_id": "<production-db-id>" }
+        { "binding": "replyloom_db", "database_name": "replyloom_db-production", "database_id": "<production-db-id>" }
       ],
       "r2_buckets": [
-        { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media-production" }
+        { "binding": "replyloom_media", "bucket_name": "replyloom-media-production" }
       ],
       "kv_namespaces": [
         { "binding": "replyloom_reply_cache", "id": "<production-kv-id>" }
@@ -151,11 +170,11 @@ Then deploy to a specific environment:
 
 ```bash
 # Staging
-wrangler d1 migrations apply whatsapp-ai --env staging --remote
+wrangler d1 migrations apply replyloom_db --env staging --remote
 wrangler deploy --env staging
 
 # Production
-wrangler d1 migrations apply whatsapp-ai --env production --remote
+wrangler d1 migrations apply replyloom_db --env production --remote
 wrangler deploy --env production
 ```
 
@@ -221,24 +240,24 @@ The engine exposes `GET /health` and the web app has a built-in health endpoint.
 
 ## D1 database backups
 
-D1 does not have automatic backups on the free tier. The included `.github/workflows/d1-backup.yml` workflow (it fails, rather than uploading plain text, when the `BACKUP_ENCRYPTION_KEY` secret is missing) exports D1 nightly, encrypts the SQL dump client-side with `AES-256-GCM` (`PBKDF2-SHA256`, 600,000 iterations) using `BACKUP_ENCRYPTION_KEY`, uploads it to the dedicated `whatsapp-ai-backups` R2 bucket (`backups/d1-YYYYMMDD-HHMMSS.sql.enc`), and enforces an R2 object lifecycle expiration rule (`BACKUP_RETENTION_DAYS`, default `30` days).
+D1 does not have automatic backups on the free tier. The included `.github/workflows/d1-backup.yml` workflow (it fails, rather than uploading plain text, when the `BACKUP_ENCRYPTION_KEY` secret is missing) exports D1 nightly, encrypts the SQL dump client-side with `AES-256-GCM` (`PBKDF2-SHA256`, 600,000 iterations) using `BACKUP_ENCRYPTION_KEY`, uploads it to the dedicated `replyloom-backups` R2 bucket (`backups/d1-YYYYMMDD-HHMMSS.sql.enc`), and enforces an R2 object lifecycle expiration rule (`BACKUP_RETENTION_DAYS`, default `30` days).
 
 **Manual encrypted backup via Wrangler + `scripts/config.mjs`:**
 ```bash
 export BACKUP_ENCRYPTION_KEY="your-strong-passphrase"
 FILE="d1-$(date +%Y%m%d).sql"
-wrangler d1 export whatsapp-ai --remote --output "$FILE"
+wrangler d1 export replyloom_db --remote --output "$FILE"
 node scripts/config.mjs --encrypt-file "$FILE" "${FILE}.enc"
-wrangler r2 object put "whatsapp-ai-backups/backups/${FILE}.enc" --file "${FILE}.enc" --remote
+wrangler r2 object put "replyloom-backups/backups/${FILE}.enc" --file "${FILE}.enc" --remote
 rm -f "$FILE" "${FILE}.enc"
 ```
 
 **Decrypt & Restore:**
 ```bash
 export BACKUP_ENCRYPTION_KEY="your-strong-passphrase"
-wrangler r2 object get "whatsapp-ai-backups/backups/d1-20261025-030000.sql.enc" --file d1.sql.enc --remote
+wrangler r2 object get "replyloom-backups/backups/d1-20261025-030000.sql.enc" --file d1.sql.enc --remote
 node scripts/config.mjs --decrypt-file d1.sql.enc d1.sql
-wrangler d1 execute whatsapp-ai --remote --file=d1.sql
+wrangler d1 execute replyloom_db --remote --file=d1.sql
 rm -f d1.sql d1.sql.enc
 ```
 

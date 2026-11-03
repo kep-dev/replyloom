@@ -3,7 +3,7 @@ import type { AgentConfig, AgentEnv } from "./types";
 import { TtlCache } from "../ttl-cache";
 
 // Defaults, aligned with the repo's existing embedding choice (bge-m3,
-// 1024-dim — the same model the message-search index wa-messages uses), so
+// 1024-dim — the same model the message-search index replyloom-messages uses), so
 // a single embedding model serves both indexes and multilingual support is
 // retained. The generator is only invoked for grounded, in-scope messages.
 export const ACTIVE_GENERATOR_MODEL = "@cf/google/gemma-4-26b-a4b-it";
