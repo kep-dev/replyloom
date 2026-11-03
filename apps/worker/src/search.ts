@@ -38,7 +38,7 @@ export async function searchVectorId(workspaceId: string, waSessionId: string, m
 }
 
 async function embed(env: Env, text: string, workspaceId: string): Promise<number[]> {
-  const result: any = await env.AI.run(
+  const result: any = await env.replyloom_ai.run(
     EMBEDDING_MODEL,
     { text: [text] },
     gatewayRunOptions(env, workspaceId, "search-embedding"),
@@ -72,7 +72,7 @@ export async function indexMessageForSearch(
   try {
     const vector = await embed(env, text, params.workspaceId);
     const vectorId = await searchVectorId(params.workspaceId, params.waSessionId, params.messageId);
-    await env.VECTORIZE.upsert([
+    await env.replyloom_vectorize.upsert([
       {
         id: vectorId,
         values: vector,
@@ -109,7 +109,7 @@ export async function indexMessagesForSearch(
   const valid = items.map((i) => ({ ...i, text: i.text.trim() })).filter((i) => isWorthIndexing(i.text));
   if (valid.length === 0) return { indexed: 0 };
   try {
-    const result: any = await env.AI.run(
+    const result: any = await env.replyloom_ai.run(
       EMBEDDING_MODEL,
       { text: valid.map((i) => i.text) },
       gatewayRunOptions(env, workspaceId, "search-embedding"),
@@ -129,7 +129,7 @@ export async function indexMessagesForSearch(
       })),
     );
     const ready = upserts.filter((u) => Array.isArray(u.values));
-    if (ready.length) await env.VECTORIZE.upsert(ready);
+    if (ready.length) await env.replyloom_vectorize.upsert(ready);
     return { indexed: ready.length };
   } catch (error) {
     log.error({ workspaceId, error }, "batch search indexing failed");
@@ -152,7 +152,7 @@ export interface SearchMatch {
 /** Semantic search over a workspace's messages, most relevant first. */
 export async function semanticSearch(env: Env, workspaceId: string, query: string, topK = 10): Promise<SearchMatch[]> {
   const vector = await embed(env, query, workspaceId);
-  const result = await env.VECTORIZE.query(vector, {
+  const result = await env.replyloom_vectorize.query(vector, {
     topK,
     filter: { workspaceId },
     returnMetadata: "all",

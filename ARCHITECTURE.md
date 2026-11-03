@@ -12,7 +12,7 @@ Replyloom is two Cloudflare Workers that share one D1 database. Everything runs 
 │ SSR + server functions                   │     │ router (index.ts): auth, rate limits, CORS            │
 │ Better Auth (sessions, orgs, invites)    │     │                                                       │
 │ workspace-scoped queries (Drizzle)       │────►│ WhatsAppSession DO ×N  (one per linked number)        │
-│ service binding WA_WORKER ───────────────┼─────│   Baileys socket ⇄ WhatsApp servers                   │
+│ binding replyloom_wa_worker ─────────────┼─────│   Baileys socket ⇄ WhatsApp servers                   │
 └──────┬──────────────────────┬────────────┘     │   auth state in DO SQLite, outbound guard, WS fan-out │
        │                      │                  │ Scheduler DO (one global alarm)                       │
        │                      │                  │ Queue consumer (broadcast dispatch)                   │
@@ -33,18 +33,18 @@ Replyloom is two Cloudflare Workers that share one D1 database. Everything runs 
 | `packages/db` | The single source of truth for the schema (Drizzle) and SQL migrations (`packages/db/migrations`), used by both apps. |
 | `packages/ui` | Shared shadcn/ui components (`@workspace/ui/components/*`). |
 
-The two apps are **separate Workers on purpose**: you can deploy or roll back the engine without taking the CRM down, and the other way round. `apps/web` calls the engine over a **service binding** (`WA_WORKER`) authenticated with `ENGINE_INTERNAL_SECRET`. External integrations call the engine's public URL with a workspace **API key**.
+The two apps are **separate Workers on purpose**: you can deploy or roll back the engine without taking the CRM down, and the other way round. `apps/web` calls the engine over a **service binding** (`replyloom_wa_worker`) authenticated with `ENGINE_INTERNAL_SECRET`. External integrations call the engine's public URL with a workspace **API key**.
 
 ## Storage
 
 | Store | Used for |
 |---|---|
-| **D1** (`DB`) | Everything relational: users, orgs, sessions, contacts, conversations, messages, lists, campaigns, deals, templates, webhooks, API keys, `entity_counts`. |
+| **D1** (`replyloom_db`) | Everything relational: users, orgs, sessions, contacts, conversations, messages, lists, campaigns, deals, templates, webhooks, API keys, `entity_counts`. |
 | **Durable Object SQLite** | Per-number Baileys auth state (`wa_creds`, `wa_keys`) and per-session counters (pace buckets, daily caps). |
-| **R2** (`MEDIA`) | Inbound/outbound media and the media library. |
-| **Queues** (`BROADCAST_QUEUE`) | Broadcast dispatch, one message per recipient batch, with delays. |
+| **R2** (`replyloom_media`) | Inbound/outbound media and the media library. |
+| **Queues** (`replyloom_broadcast_queue`) | Broadcast dispatch, one message per recipient batch, with delays. |
 | **Vectorize** | `wa-messages` (semantic message search) and `wa-docs` (AI agent knowledge), 1024-dim `@cf/baai/bge-m3`. |
-| **KV** (`REPLY_CACHE`) | AI agent answer cache, config cache and per-conversation rate limits. |
+| **KV** (`replyloom_reply_cache`) | AI agent answer cache, config cache and per-conversation rate limits. |
 
 ## Main flows
 

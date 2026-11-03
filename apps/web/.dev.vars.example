@@ -9,7 +9,7 @@ BETTER_AUTH_URL=http://localhost:3000
 ENGINE_INTERNAL_SECRET=
 WS_TOKEN_SECRET=
 
-# Local dev only: vite dev can't resolve the WA_WORKER service binding.
+# Local dev only: vite dev can't resolve the replyloom_wa_worker service binding.
 # Never set this in production.
 ENGINE_LOCAL_URL=http://localhost:8787
 

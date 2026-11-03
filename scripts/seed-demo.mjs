@@ -7,7 +7,7 @@
 // (every number is in the fictional +1 555-01xx range).
 //
 // Usage (from the repo root, after `pnpm install`):
-//   0. in apps/web/wrangler.jsonc set the DB binding to "remote": false
+//   0. in apps/web/wrangler.jsonc set the replyloom_db binding to "remote": false
 //   1. pnpm dev                        # or just the web app
 //   2. sign up in the browser          # creates your user + workspace
 //   3. pnpm seed:demo [--email you@example.com]
@@ -37,10 +37,10 @@ if (args.includes("--remote")) {
 // dev), in which case the app would read your real Cloudflare D1 instead.
 try {
   const cfg = readFileSync(join(webDir, "wrangler.jsonc"), "utf8");
-  const d1Line = cfg.split("\n").find((l) => l.includes('"binding": "DB"')) ?? "";
+  const d1Line = cfg.split("\n").find((l) => l.includes('"binding": "replyloom_db"')) ?? "";
   if (/"remote":\s*true/.test(d1Line)) {
     console.error(
-      'apps/web/wrangler.jsonc has "remote": true on the DB binding, so the app reads your real D1, not the local one.\n' +
+      'apps/web/wrangler.jsonc has "remote": true on the replyloom_db binding, so the app reads your real D1, not the local one.\n' +
         'For demo data, set it to "remote": false (web only is enough), restart `pnpm dev`, sign up, then run this again.',
     );
     process.exit(1);

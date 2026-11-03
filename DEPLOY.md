@@ -1,12 +1,12 @@
 # Deploying
 
-This app is two Cloudflare Workers (`apps/worker`, the WhatsApp engine; `apps/web`, the CRM) sharing one D1 database. `pnpm setup` + `pnpm deploy` handle the whole thing, but here's what they do, in case you want to run any step by hand, use a CI pipeline instead, or something doesn't go as expected.
+This app is two Cloudflare Workers (`apps/worker`, the WhatsApp engine; `apps/web`, the CRM) sharing one D1 database. `pnpm run setup` + `pnpm run deploy` handle the whole thing, but here's what they do, in case you want to run any step by hand, use a CI pipeline instead, or something doesn't go as expected.
 
 ## Prerequisites
 
 - A Cloudflare account (the free tier works for trying this out; Durable Objects, Queues, and Vectorize all have free tier allowances but check current limits for production use).
 - Node 22+ and pnpm (`corepack enable` is enough — this repo pins the pnpm version).
-- `pnpm exec wrangler login` — the setup/deploy scripts run as you, against your account.
+- `pnpm --filter worker exec wrangler login` — the setup/deploy scripts run as you, against your account.
 
 ## Config files (not in git)
 
@@ -19,6 +19,11 @@ Per-deployment config is kept out of the repo so nobody's Cloudflare ids or doma
 | `apps/web/.env.production.example` | `apps/web/.env.production` |
 
 Edit your files, not the templates. `pnpm deploy` runs `node scripts/config.mjs --check` and stops if any placeholder is left. If your Cloudflare login can see several accounts, `export CLOUDFLARE_ACCOUNT_ID=...` first (there's no `account_id` in the templates).
+
+Resource binding names use the `replyloom_` prefix, for example `replyloom_db`,
+`replyloom_media`, and `replyloom_wa_worker`. These are the properties used by
+the code through `env`. The target resource is selected separately by its
+database id, bucket name, queue name, or Worker name in the config.
 
 **Backup / restore.** So you never have to set this up again on the same machine:
 
@@ -48,21 +53,21 @@ Keep `BACKUP_ENCRYPTION_KEY` somewhere outside the backup (a password manager, p
 
 The deploy job skips cleanly when any of these is missing, for example on forks. The nightly D1 backup uses the same values.
 
-## `pnpm setup`
+## `pnpm run setup`
 
 Runs `scripts/setup.sh`, which is idempotent (safe to re-run; it reuses anything that already exists):
 
 1. **D1 database** — creates `whatsapp-ai` if `apps/worker/wrangler.jsonc`'s `database_id` is still the placeholder, and writes the real id into both `apps/worker/wrangler.jsonc` and `apps/web/wrangler.jsonc` (they must point at the *same* database).
 2. **R2 bucket** — creates `whatsapp-ai-media` for message media.
 3. **Queue** — creates `wa-broadcast-dispatch`, used to stagger broadcast sends with randomized delays.
-4. **Vectorize indexes** — creates `wa-messages` (message search) and `wa-docs` (AI agent grounding), both 1024 dimensions, cosine similarity — matching the `@cf/baai/bge-m3` embedding model.
+4. **Vectorize indexes** — creates `wa-messages` (message search) and `wa-docs` (AI agent grounding), both 1024 dimensions, cosine similarity — matching the `@cf/baai/bge-m3` embedding model. Both also get a string metadata index on `workspaceId`, required for tenant-scoped search and RAG filtering before vectors are inserted.
 5. **KV namespace** — creates `REPLY_CACHE` for the AI agent's exact-match answer cache + short-lived config cache, and writes its id into `apps/worker/wrangler.jsonc`.
 6. **D1 migrations** — applies everything in `packages/db/migrations` to the remote database.
 7. **Secrets** — generates `BETTER_AUTH_SECRET` (web), plus `WS_TOKEN_SECRET` and `ENGINE_INTERNAL_SECRET` (same value on both Workers), if they aren't already set.
 
 After it finishes, set your real URLs: `BETTER_AUTH_URL` in `apps/web/wrangler.jsonc` (Better Auth uses it for cookies and redirects), `CORS_ORIGIN` in `apps/worker/wrangler.jsonc`, and `VITE_ENGINE_URL` in `apps/web/wrangler.jsonc` and `apps/web/.env.production`.
 
-## `pnpm deploy`
+## `pnpm run deploy`
 
 Runs `scripts/deploy.sh`:
 
@@ -84,8 +89,10 @@ wrangler r2 bucket create whatsapp-ai-media
 wrangler queues create wa-broadcast-dispatch
 wrangler vectorize create wa-messages --dimensions=1024 --metric=cosine
 wrangler vectorize create wa-docs --dimensions=1024 --metric=cosine
-wrangler kv namespace create REPLY_CACHE                 # copy the id into apps/worker/wrangler.jsonc
-wrangler d1 migrations apply whatsapp-ai --remote --migrations-dir ../../packages/db/migrations
+wrangler vectorize create-metadata-index wa-messages --propertyName=workspaceId --type=string
+wrangler vectorize create-metadata-index wa-docs --propertyName=workspaceId --type=string
+wrangler kv namespace create REPLY_CACHE --binding replyloom_reply_cache # copy the id into apps/worker/wrangler.jsonc
+wrangler d1 migrations apply whatsapp-ai --remote
 
 # From apps/web/
 wrangler secret put BETTER_AUTH_SECRET                  # paste a random 32+ byte value
@@ -114,26 +121,26 @@ Add env blocks to both `apps/worker/wrangler.jsonc` and `apps/web/wrangler.jsonc
       "name": "wa-cf-poc-staging",
       "vars": { "CORS_ORIGIN": "https://staging.yourdomain.com" },
       "d1_databases": [
-        { "binding": "DB", "database_name": "whatsapp-ai-staging", "database_id": "<staging-db-id>" }
+        { "binding": "replyloom_db", "database_name": "whatsapp-ai-staging", "database_id": "<staging-db-id>" }
       ],
       "r2_buckets": [
-        { "binding": "MEDIA", "bucket_name": "whatsapp-ai-media-staging" }
+        { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media-staging" }
       ],
       "kv_namespaces": [
-        { "binding": "REPLY_CACHE", "id": "<staging-kv-id>" }
+        { "binding": "replyloom_reply_cache", "id": "<staging-kv-id>" }
       ]
     },
     "production": {
       "name": "wa-cf-poc-production",
       "vars": { "CORS_ORIGIN": "https://app.yourdomain.com" },
       "d1_databases": [
-        { "binding": "DB", "database_name": "whatsapp-ai-production", "database_id": "<production-db-id>" }
+        { "binding": "replyloom_db", "database_name": "whatsapp-ai-production", "database_id": "<production-db-id>" }
       ],
       "r2_buckets": [
-        { "binding": "MEDIA", "bucket_name": "whatsapp-ai-media-production" }
+        { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media-production" }
       ],
       "kv_namespaces": [
-        { "binding": "REPLY_CACHE", "id": "<production-kv-id>" }
+        { "binding": "replyloom_reply_cache", "id": "<production-kv-id>" }
       ]
     }
   }
@@ -237,7 +244,7 @@ rm -f d1.sql d1.sql.enc
 
 ## AI Gateway
 
-Every model call in the worker — the agent's intent classifier, the reply generator, RAG + message-search embeddings — is routed through an [AI Gateway](https://developers.cloudflare.com/ai-gateway/) via the AI binding (worker var `AIG_GATEWAY_ID`, default `"default"`). Each request is tagged `ws:{workspaceId}` and carries `metadata.workspaceId`/`feature`, so gateway metrics can be filtered per workspace once a matching [custom-metadata profile](https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/) exists.
+Every model call in the worker — the agent's intent classifier, the reply generator, RAG + message-search embeddings — is routed through an [AI Gateway](https://developers.cloudflare.com/ai-gateway/) via the `replyloom_ai` binding (worker var `AIG_GATEWAY_ID`, default `"default"`). Each request is tagged `ws:{workspaceId}` and carries `metadata.workspaceId`/`feature`, so gateway metrics can be filtered per workspace once a matching [custom-metadata profile](https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/) exists.
 
 **Privacy by default (`collectLog: false`):** By default, `gatewayRunOptions` sets `collectLog: false` so Cloudflare AI Gateway records operational telemetry (request counts, token usage, latency, cost, and cache hit/miss rates) **without** persisting raw WhatsApp message bodies, conversation history, or RAG context in AI Gateway logs. To opt in to full request/response payload logging for debugging, set `AIG_COLLECT_LOG="true"` in `apps/worker`.
 
@@ -249,7 +256,7 @@ Features that are configured dashboard-side on the gateway (no code changes need
 - **Dynamic routing / fallbacks** — route between models/providers with A/B and failover. The worker also has a built-in code fallback: if the generator model fails it retries once on `@cf/meta/llama-3.1-8b-instruct`, and every gateway call retries up to 2×.
 - **Logging / Logpush / OpenTelemetry** — export gateway logs for audit and tracing.
 
-Disabling: remove the `gateway` option in `apps/worker/src/ai-agent/gateway.ts` (`gatewayRunOptions`) and keep the plain `env.AI.run()` calls — everything degrades to direct Workers AI.
+Disabling: remove the `gateway` option in `apps/worker/src/ai-agent/gateway.ts` (`gatewayRunOptions`) and keep the plain `env.replyloom_ai.run()` calls — everything degrades to direct Workers AI.
 
 ## Security Configuration
 
@@ -278,7 +285,7 @@ Rate limiting is configured via `wrangler.jsonc` using Cloudflare's built-in Rat
 // apps/worker/wrangler.jsonc
 "ratelimits": [
   {
-    "name": "API_RATE_LIMITER",
+    "name": "replyloom_api_rate_limiter",
     "namespace_id": "1001",
     "simple": {
       "limit": 100,  // 100 requests per minute
@@ -286,7 +293,7 @@ Rate limiting is configured via `wrangler.jsonc` using Cloudflare's built-in Rat
     }
   },
   {
-    "name": "AUTH_RATE_LIMITER",
+    "name": "replyloom_auth_rate_limiter",
     "namespace_id": "1002",
     "simple": {
       "limit": 10,   // 10 requests per minute for auth

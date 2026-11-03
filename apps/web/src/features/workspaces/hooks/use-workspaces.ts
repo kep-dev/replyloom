@@ -14,7 +14,7 @@ import { resolveActiveWorkspaceId } from "@/lib/auth"
 import { withSafeErrors } from "@/lib/errors"
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 async function requireSession() {

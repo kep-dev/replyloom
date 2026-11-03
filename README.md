@@ -139,7 +139,7 @@ cd apps/web && npx wrangler d1 migrations apply whatsapp-ai --local && cd ../..
 pnpm dev       # web on :3000, engine on :8787
 ```
 
-**Demo data:** set the `DB` binding in `apps/web/wrangler.jsonc` to `"remote": false` (so the app reads the local database), sign up at http://localhost:3000, then run `pnpm seed:demo` to fill your workspace with a fictional interior-design studio (3 numbers, 24 contacts, chats, groups, deals, lists, broadcasts, templates and auto-replies). It only writes to the local database, and re-running it replaces the previous demo data.
+**Demo data:** set the `replyloom_db` binding in `apps/web/wrangler.jsonc` to `"remote": false` (so the app reads the local database), sign up at http://localhost:3000, then run `pnpm seed:demo` to fill your workspace with a fictional interior-design studio (3 numbers, 24 contacts, chats, groups, deals, lists, broadcasts, templates and auto-replies). It only writes to the local database, and re-running it replaces the previous demo data.
 
 | Command | What it does |
 |---|---|

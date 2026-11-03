@@ -11,7 +11,7 @@ import { COUNTER, readCount } from "@/lib/counts"
 const TEMPLATES_PICKER_MAX = 500
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 export type TemplateMediaType = "image" | "video" | "audio" | "document"

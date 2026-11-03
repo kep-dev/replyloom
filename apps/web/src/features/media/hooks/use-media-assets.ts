@@ -9,7 +9,7 @@ import { cursorLimit, decodeCursor, toCursorPage } from "@/lib/cursor"
 import { COUNTER, cappedCount, readCount } from "@/lib/counts"
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 export type MediaAssetType = "image" | "video" | "audio" | "document"

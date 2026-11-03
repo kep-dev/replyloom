@@ -22,7 +22,7 @@ export const getSessionCached = createServerOnlyFn(() =>
 export const getMembershipCached = createServerOnlyFn(
   (userId: string, workspaceId: string) =>
     memoPerRequest(`auth:member:${userId}:${workspaceId}`, () =>
-      createDb(env.DB)
+      createDb(env.replyloom_db)
         .select({ id: member.id, role: member.role })
         .from(member)
         .where(and(eq(member.userId, userId), eq(member.organizationId, workspaceId)))

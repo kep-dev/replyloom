@@ -28,8 +28,8 @@
   },
   "durable_objects": {
     "bindings": [
-      { "name": "WHATSAPP_SESSION", "class_name": "WhatsAppSession" },
-      { "name": "SCHEDULER", "class_name": "Scheduler" }
+      { "name": "replyloom_whatsapp_session", "class_name": "WhatsAppSession" },
+      { "name": "replyloom_scheduler", "class_name": "Scheduler" }
     ]
   },
   "migrations": [
@@ -49,17 +49,17 @@
   // production. This does mean local dev reads/writes your actual D1
   // database, not an isolated local copy.
   "d1_databases": [
-    { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
+    { "binding": "replyloom_db", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
   "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "whatsapp-ai-media" }
+    { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media" }
   ],
   // Anti-ban broadcast dispatch: each recipient is enqueued once with a
   // staggered delaySeconds (see src/broadcast.ts) instead of blasting the
   // whole list at once. Create once with `wrangler queues create wa-broadcast-dispatch`.
   "queues": {
     "producers": [
-      { "queue": "wa-broadcast-dispatch", "binding": "BROADCAST_QUEUE" }
+      { "queue": "wa-broadcast-dispatch", "binding": "replyloom_broadcast_queue" }
     ],
     "consumers": [
       { "queue": "wa-broadcast-dispatch", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 5 }
@@ -78,22 +78,22 @@
   // index once with:
   //   wrangler vectorize create wa-messages --dimensions=1024 --metric=cosine
   "ai": {
-    "binding": "AI"
+    "binding": "replyloom_ai"
   },
   "vectorize": [
-    { "binding": "VECTORIZE", "index_name": "wa-messages", "remote": true },
+    { "binding": "replyloom_vectorize", "index_name": "wa-messages", "remote": true },
     // AI agent grounding (RAG): doc chunks embedded with bge-m3 (1024-dim,
     // cosine) and filtered per workspace. Create once with:
     //   wrangler vectorize create wa-docs --dimensions=1024 --metric=cosine
-    { "binding": "AGENT_VECTORIZE", "index_name": "wa-docs", "remote": true }
+    { "binding": "replyloom_agent_vectorize", "index_name": "wa-docs", "remote": true }
   ],
   // Cheap per-message cache for the AI agent: exact-match FAQ answers (so
   // repeated questions cost ~0 tokens) and a short-lived copy of each
   // workspace's agent config. Create once with:
-  //   wrangler kv namespace create REPLY_CACHE
+  //   wrangler kv namespace create REPLY_CACHE --binding replyloom_reply_cache
   // then paste the returned id below (pnpm setup does this for you).
   "kv_namespaces": [
-    { "binding": "REPLY_CACHE", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+    { "binding": "replyloom_reply_cache", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
   ],
   // Rate limiting via Cloudflare's built-in Rate Limiting API.
   // Requires wrangler 4.36.0+ and a paid Workers plan.
@@ -101,7 +101,7 @@
   "ratelimits": [
     {
       // General API rate limit: 100 requests per minute per IP
-      "name": "API_RATE_LIMITER",
+      "name": "replyloom_api_rate_limiter",
       "namespace_id": "1001",
       "simple": {
         "limit": 100,
@@ -110,7 +110,7 @@
     },
     {
       // Auth endpoints: stricter limit to prevent brute force
-      "name": "AUTH_RATE_LIMITER",
+      "name": "replyloom_auth_rate_limiter",
       "namespace_id": "1002",
       "simple": {
         "limit": 10,

@@ -34,7 +34,7 @@ import { cursorLimit, decodeCursor, toCursorPage } from "@/lib/cursor"
 import { COUNTER, readCount } from "@/lib/counts"
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 /** A session id from another workspace must never be usable to send. */

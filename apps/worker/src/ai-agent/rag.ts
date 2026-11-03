@@ -3,7 +3,7 @@ import type { AgentConfig, AgentEnv, RetrievedChunk } from "./types";
 import { gatewayRunOptions } from "./gateway";
 
 async function embed(env: AgentEnv, model: string, texts: string[], workspaceId: string): Promise<number[][]> {
-  const result: any = await env.AI.run(
+  const result: any = await env.replyloom_ai.run(
     model,
     { text: texts },
     gatewayRunOptions(env, workspaceId, "embedding"),
@@ -27,7 +27,7 @@ export async function retrieveContext(
 ): Promise<RetrievedChunk[]> {
   const [embedding] = await embed(env, config.models.embedding, [query], config.workspaceId);
 
-  const matches = await env.AGENT_VECTORIZE.query(embedding, {
+  const matches = await env.replyloom_agent_vectorize.query(embedding, {
     topK: config.maxContextChunks,
     filter: { workspaceId: config.workspaceId },
     returnMetadata: true,
@@ -37,7 +37,7 @@ export async function retrieveContext(
   if (above.length === 0) return [];
 
   const ids = above.map((m) => m.id);
-  const db = createDb(env.DB);
+  const db = createDb(env.replyloom_db);
   const rows = await db
     .select({ id: docChunks.id, text: docChunks.text, source: docChunks.source })
     .from(docChunks)
@@ -70,7 +70,7 @@ export async function ingestDocument(
   const chunks = chunkText(params.text, chunkSize);
   if (chunks.length === 0) return { chunks: 0 };
 
-  const db = createDb(env.DB);
+  const db = createDb(env.replyloom_db);
   let deleted = 0;
   if (params.docId) {
     const olds = await db
@@ -81,7 +81,7 @@ export async function ingestDocument(
     if (olds.length > 0) {
       const oldIds = olds.map((o) => o.id);
       // Best-effort vector cleanup first (index may lag a delete, D1 is source of truth).
-      await env.AGENT_VECTORIZE.deleteByIds(oldIds).catch(() => {});
+      await env.replyloom_agent_vectorize.deleteByIds(oldIds).catch(() => {});
       await db.delete(docChunks).where(inArray(docChunks.id, oldIds));
       deleted = oldIds.length;
     }
@@ -105,7 +105,7 @@ export async function ingestDocument(
   );
   await db.batch(statements as unknown as [(typeof statements)[number], ...(typeof statements)[number][]]);
 
-  await env.AGENT_VECTORIZE.upsert(
+  await env.replyloom_agent_vectorize.upsert(
     inserts.map((c) => ({
       id: c.id,
       values: c.vector,

@@ -17,7 +17,7 @@ import { cursorLimit, decodeCursor, toCursorPage } from "@/lib/cursor"
 import { COUNTER, countOf, readCounts } from "@/lib/counts"
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 const DEFAULT_STAGES = [

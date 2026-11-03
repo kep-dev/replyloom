@@ -1,5 +1,5 @@
 // Server-only access to the WhatsApp worker (apps/worker) via a Cloudflare
-// service binding (see apps/web/wrangler.jsonc -> services -> WA_WORKER).
+// service binding (see apps/web/wrangler.jsonc -> services -> replyloom_wa_worker).
 // This runs Worker-to-Worker over Cloudflare's network in every deployed
 // environment: no public URL, no CORS. In local dev it goes through
 // fetchWaWorker() (see wa-engine.ts) instead, which falls back to a plain

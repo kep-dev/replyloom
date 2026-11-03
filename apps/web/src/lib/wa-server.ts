@@ -604,14 +604,14 @@ export async function proxyWorkspaceMedia(request: Request): Promise<Response> {
   const key = new URL(request.url).searchParams.get("key")
   if (!key) return new Response("Missing media key", { status: 400 })
   // Same ownership rule as the engine: keys embed the workspace id as the
-  // first segment. Read R2 directly (this Worker has the MEDIA binding) --
+  // first segment. Read R2 directly (this Worker has the replyloom_media binding) --
   // was web -> engine -> R2, two Worker hops per image.
   if (!key.startsWith(`${workspaceId}/`) || key.includes("..")) {
     return new Response("Forbidden", { status: 403 })
   }
 
   const etag = request.headers.get("If-None-Match")
-  const object = await env.MEDIA.get(key, etag ? { onlyIf: { etagDoesNotMatch: etag.replace(/"/g, "") } } : undefined)
+  const object = await env.replyloom_media.get(key, etag ? { onlyIf: { etagDoesNotMatch: etag.replace(/"/g, "") } } : undefined)
   if (!object) {
     // Fallback via the engine: in local dev the web and engine Workers keep
     // separate local R2 state, so an object the engine stored isn't here.

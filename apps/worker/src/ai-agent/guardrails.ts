@@ -38,7 +38,7 @@ export async function classifyIntent(
   if (keywordLabel) return toResult(keywordLabel, config.businessName);
 
   try {
-    const result: any = await env.AI.run(
+    const result: any = await env.replyloom_ai.run(
       config.models.classifier,
       {
         messages: [{ role: "user", content: buildClassifierPrompt(config, message) }],

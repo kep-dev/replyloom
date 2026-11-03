@@ -225,7 +225,7 @@ export class WhatsAppSession implements DurableObject {
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
-    this.db = createDb(env.DB);
+    this.db = createDb(env.replyloom_db);
   }
 
   // DOs for this app are always created via idFromName(sessionId) in
@@ -1191,7 +1191,7 @@ export class WhatsAppSession implements DurableObject {
         let content: any;
 
         if (body.mediaKey) {
-          const object = await this.env.MEDIA.get(body.mediaKey);
+          const object = await this.env.replyloom_media.get(body.mediaKey);
           if (!object) {
             return Response.json({ ok: false, error: "Template media not found in storage" }, { status: 404 });
           }

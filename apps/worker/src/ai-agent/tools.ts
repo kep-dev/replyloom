@@ -86,7 +86,7 @@ export async function listWorkspaceWebhookTools(
   env: AgentEnv,
   workspaceId: string,
 ): Promise<WorkspaceWebhookTool[]> {
-  const db = createDb(env.DB);
+  const db = createDb(env.replyloom_db);
   const rows = await db
     .select()
     .from(agentWebhookTools)
@@ -214,7 +214,7 @@ async function findCustomerContact(ctx: AgentContext) {
   const hasIdentifier = !!ctx.customerPhone || (!!lookupJid && !lookupJid.endsWith("@g.us"));
   if (!hasIdentifier) return undefined;
 
-  const db = createDb(ctx.env.DB);
+  const db = createDb(ctx.env.replyloom_db);
   const conds = [];
   if (ctx.customerPhone) conds.push(eq(contacts.phoneNumber, ctx.customerPhone));
   if (lookupJid && !lookupJid.endsWith("@g.us")) conds.push(eq(contacts.jid, lookupJid));
@@ -235,7 +235,7 @@ const lookupCustomerTool: ToolDefinition = {
     const contact = await findCustomerContact(ctx);
     if (!contact) return "No customer profile found for this number in the CRM.";
 
-    const db = createDb(ctx.env.DB);
+    const db = createDb(ctx.env.replyloom_db);
     const noteRows = await db
       .select({ body: notes.body })
       .from(notes)
@@ -266,7 +266,7 @@ const recentConversationTool: ToolDefinition = {
   },
   handler: async (args, ctx) => {
     const limit = Math.min(12, Math.max(1, Number(args.limit) || 5));
-    const db = createDb(ctx.env.DB);
+    const db = createDb(ctx.env.replyloom_db);
 
     let conversationId = ctx.conversationId;
     if (!conversationId) {
@@ -344,7 +344,7 @@ const lookupDealsTool: ToolDefinition = {
     "Look up this customer's deals/opportunities in the pipeline (title, stage, value). Call this when the customer asks about a purchase, deal, or order status.",
   parameters: { type: "object", properties: {}, required: [] },
   handler: async (_args, ctx) => {
-    const db = createDb(ctx.env.DB);
+    const db = createDb(ctx.env.replyloom_db);
     const contact = await findCustomerContact(ctx);
     if (!contact) return "No customer profile found for this number in the CRM.";
 
@@ -379,7 +379,7 @@ const escalateToHumanTool: ToolDefinition = {
     required: ["reason"],
   },
   handler: async (args, ctx) => {
-    const db = createDb(ctx.env.DB);
+    const db = createDb(ctx.env.replyloom_db);
     await db.insert(agentEscalations).values({
       workspaceId: ctx.workspaceId,
       conversationId: ctx.conversationId ?? null,

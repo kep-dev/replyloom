@@ -99,7 +99,7 @@ export async function downloadAndStoreMedia(
     const ext = extFor(mime, type);
     const mediaKey = `${workspaceId}/${waSessionId}/${waMessageId}.${ext}`;
 
-    await env.MEDIA.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
+    await env.replyloom_media.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
 
     return { mediaKey, mediaMime: mime, mediaMeta: extractMediaMeta(content, type) };
   } catch (err: any) {
@@ -128,7 +128,7 @@ export async function storeOutgoingMedia(
 ): Promise<{ mediaKey: string; mediaMime: string; mediaMeta: MediaMeta }> {
   const ext = extFor(mime, type);
   const mediaKey = `${workspaceId}/${waSessionId}/${waMessageId}.${ext}`;
-  await env.MEDIA.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
+  await env.replyloom_media.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
 
   const mediaMeta: MediaMeta =
     type === "document"
@@ -165,6 +165,6 @@ export async function storeLibraryMedia(
   const type = mediaTypeFromMime(mime);
   const ext = extFor(mime, type);
   const mediaKey = `${workspaceId}/templates/${crypto.randomUUID()}.${ext}`;
-  await env.MEDIA.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
+  await env.replyloom_media.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
   return { mediaKey, mediaMime: mime, mediaType: type };
 }

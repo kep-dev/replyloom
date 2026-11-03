@@ -7,7 +7,7 @@ import { requireWorkspaceAccess, requirePermission, requireCurrentPermission } f
 import { fetchWaWorker } from "@/lib/wa-engine"
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 interface LiveStatus {

@@ -65,7 +65,7 @@ export async function loadAgentConfig(env: AgentEnv, workspaceId: string): Promi
 async function loadAgentConfigUncached(env: AgentEnv, workspaceId: string): Promise<AgentConfig> {
   const key = `${CONFIG_CACHE_PREFIX}${workspaceId}`;
   try {
-    const cached = await env.REPLY_CACHE.get(key);
+    const cached = await env.replyloom_reply_cache.get(key);
     if (cached) {
       const parsed = JSON.parse(cached) as AgentConfig;
       return {
@@ -82,7 +82,7 @@ async function loadAgentConfigUncached(env: AgentEnv, workspaceId: string): Prom
   }
   const config = await buildAgentConfig(env, workspaceId);
   if (config.enabled) {
-    await env.REPLY_CACHE
+    await env.replyloom_reply_cache
       .put(key, JSON.stringify(config), { expirationTtl: CONFIG_CACHE_TTL })
       .catch(() => {});
   }
@@ -91,11 +91,11 @@ async function loadAgentConfigUncached(env: AgentEnv, workspaceId: string): Prom
 
 export function invalidateConfigCache(env: AgentEnv, workspaceId: string): Promise<unknown> {
   memoryConfigCache.invalidate(workspaceId);
-  return env.REPLY_CACHE.delete(`${CONFIG_CACHE_PREFIX}${workspaceId}`).catch(() => {});
+  return env.replyloom_reply_cache.delete(`${CONFIG_CACHE_PREFIX}${workspaceId}`).catch(() => {});
 }
 
 async function buildAgentConfig(env: AgentEnv, workspaceId: string): Promise<AgentConfig> {
-  const db = createDb(env.DB);
+  const db = createDb(env.replyloom_db);
   try {
     const row = await db
       .select()

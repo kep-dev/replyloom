@@ -9,7 +9,7 @@ import { ACTIVE_GENERATOR_MODEL } from "./config";
 export const FALLBACK_GENERATOR: string = ACTIVE_GENERATOR_MODEL;
 
 /**
- * Builds the AI Gateway options passed as the 3rd arg to `env.AI.run()`.
+ * Builds the AI Gateway options passed as the 3rd arg to `env.replyloom_ai.run()`.
  *
  * Every model call in the agent pipelines is routed through the gateway so it
  * shows up in AI Gateway analytics (requests, tokens, cost, latency, cache

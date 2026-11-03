@@ -5,5 +5,5 @@ import { createDb } from "@workspace/db"
 // from server functions / route loaders (same pattern as lib/wa-worker.ts),
 // never from client components — "cloudflare:workers" doesn't exist in the browser.
 export function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }

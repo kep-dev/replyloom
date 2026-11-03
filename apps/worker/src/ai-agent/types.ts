@@ -2,10 +2,10 @@
 // bindings it actually touches (structural subset of the worker's Env), so
 // it never imports from ../index and there's no import cycle.
 export interface AgentEnv {
-  AI: Ai;
-  DB: D1Database;
-  AGENT_VECTORIZE: VectorizeIndex; // wa-docs: grounding vectors for the agent
-  REPLY_CACHE: KVNamespace; // cheap answer + short-lived config cache
+  replyloom_ai: Ai;
+  replyloom_db: D1Database;
+  replyloom_agent_vectorize: VectorizeIndex; // wa-docs: grounding vectors for the agent
+  replyloom_reply_cache: KVNamespace; // cheap answer + short-lived config cache
   /**
    * AI Gateway id to route model calls through (defaults to the account's
    * auto-provisioned "default" gateway when unset).
@@ -24,7 +24,7 @@ export interface AgentModels {
   classifier: string;
   /** Main reply model — supports Workers AI function calling. */
   generator: string;
-  /** Embedding model for RAG — must match the AGENT_VECTORIZE index dims. */
+  /** Embedding model for RAG — must match the replyloom_agent_vectorize index dims. */
   embedding: string;
 }
 

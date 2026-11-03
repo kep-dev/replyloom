@@ -26,7 +26,7 @@ if (
 }
 
 export const auth = betterAuth({
-  database: drizzleAdapter(createDb(env.DB), {
+  database: drizzleAdapter(createDb(env.replyloom_db), {
     provider: "sqlite",
     schema,
     // D1 doesn't support the interactive multi-statement transactions the

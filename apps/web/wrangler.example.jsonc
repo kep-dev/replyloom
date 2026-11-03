@@ -15,7 +15,7 @@
   "services": [
     // Keep the worker service local during development. The worker's
     // Vectorize bindings are configured as remote below in its own config.
-    { "binding": "WA_WORKER", "service": "wa-cf-poc" }
+    { "binding": "replyloom_wa_worker", "service": "wa-cf-poc" }
   ],
   // Same physical D1 database as apps/worker — keep both ids in sync.
   // D1 is "remote" (not the default local sqlite emulation) so apps/web and
@@ -27,10 +27,10 @@
   // production. This does mean local dev reads/writes your actual D1
   // database, not an isolated local copy.
   "d1_databases": [
-    { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
+    { "binding": "replyloom_db", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
   "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "whatsapp-ai-media" }
+    { "binding": "replyloom_media", "bucket_name": "whatsapp-ai-media" }
   ],
   "vars": {
     // Public base URL Better Auth uses for cookies/redirects. BETTER_AUTH_SECRET
@@ -58,13 +58,13 @@
   // Rate limiting for the web app Worker (CRM), enforced in src/server.ts
   // per client IP (Cloudflare's limiter is per-location, eventually
   // consistent -- a brake on abuse, not an exact quota).
-  //  - WEB_RATE_LIMITER: all server-function + /api traffic. Generous: a
+  //  - replyloom_web_rate_limiter: all server-function + /api traffic. Generous: a
   //    single inbox load fans out to ~10-20 calls and offices share NAT IPs.
-  //  - AUTH_RATE_LIMITER: sign-in / sign-up / password-reset POSTs only
+  //  - replyloom_auth_rate_limiter: sign-in / sign-up / password-reset POSTs only
   //    (credential stuffing + email-bombing brake).
   "ratelimits": [
     {
-      "name": "WEB_RATE_LIMITER",
+      "name": "replyloom_web_rate_limiter",
       "namespace_id": "2001",
       "simple": {
         "limit": 600,
@@ -72,7 +72,7 @@
       }
     },
     {
-      "name": "AUTH_RATE_LIMITER",
+      "name": "replyloom_auth_rate_limiter",
       "namespace_id": "2002",
       "simple": {
         "limit": 10,

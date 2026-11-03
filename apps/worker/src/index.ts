@@ -59,21 +59,21 @@ async function peekOutboundTarget(request: Request): Promise<string | null> {
 const log = scopedLogger("worker");
 
 export interface Env {
-  WHATSAPP_SESSION: DurableObjectNamespace;
-  SCHEDULER: DurableObjectNamespace;
-  DB: D1Database;
-  MEDIA: R2Bucket;
-  BROADCAST_QUEUE: Queue<BroadcastQueueMessage>;
-  AI: Ai;
-  VECTORIZE: VectorizeIndex;
-  AGENT_VECTORIZE: VectorizeIndex;
-  REPLY_CACHE: KVNamespace;
-  API_RATE_LIMITER: RateLimit;
-  AUTH_RATE_LIMITER: RateLimit;
+  replyloom_whatsapp_session: DurableObjectNamespace;
+  replyloom_scheduler: DurableObjectNamespace;
+  replyloom_db: D1Database;
+  replyloom_media: R2Bucket;
+  replyloom_broadcast_queue: Queue<BroadcastQueueMessage>;
+  replyloom_ai: Ai;
+  replyloom_vectorize: VectorizeIndex;
+  replyloom_agent_vectorize: VectorizeIndex;
+  replyloom_reply_cache: KVNamespace;
+  replyloom_api_rate_limiter: RateLimit;
+  replyloom_auth_rate_limiter: RateLimit;
   /**
    * Shared secret that proves a request came from apps/web (which holds the
    * same value as its ENGINE_INTERNAL_SECRET var and presents it on every
-   * engine call through the WA_WORKER service binding), used together with
+   * engine call through the replyloom_wa_worker service binding), used together with
    * the X-Engine-Workspace header. Set in wrangler vars for dev; override
    * with `wrangler secret put ENGINE_INTERNAL_SECRET` in production.
    */
@@ -191,7 +191,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     const doUrl = new URL("/ws" + url.search, url.origin);
     const doRequest = new Request(doUrl, request);
     doRequest.headers.delete("X-Session-Workspace");
-    const stub = env.WHATSAPP_SESSION.get(env.WHATSAPP_SESSION.idFromName(wsMatch[1]));
+    const stub = env.replyloom_whatsapp_session.get(env.replyloom_whatsapp_session.idFromName(wsMatch[1]));
     return stub.fetch(doRequest);
   }
 
@@ -216,7 +216,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       return Response.json({ ok: false, error: "Server misconfigured (WS_TOKEN_SECRET unset)" }, { status: 500 });
     }
     const sessionId = wsTokenMatch[1];
-    const db = createDb(env.DB);
+    const db = createDb(env.replyloom_db);
     const session = await db
       .select({ workspaceId: waSessions.workspaceId })
       .from(waSessions)
@@ -259,7 +259,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     // X-Session-Workspace header doesn't match (defence in depth — this is
     // what actually stops a caller that knows the secret from touching a
     // session outside their workspace).
-    const db = createDb(env.DB);
+    const db = createDb(env.replyloom_db);
     const session = await db
       .select({ workspaceId: waSessions.workspaceId })
       .from(waSessions)
@@ -310,8 +310,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     // integrations get the "api" limits, the CRM UI the "manual" ones.
     newRequest.headers.delete("X-Send-Kind");
     if (caller.kind === "api") newRequest.headers.set("X-Send-Kind", "api");
-    const id = env.WHATSAPP_SESSION.idFromName(sessionId);
-    const stub = env.WHATSAPP_SESSION.get(id);
+    const id = env.replyloom_whatsapp_session.idFromName(sessionId);
+    const stub = env.replyloom_whatsapp_session.get(id);
     return stub.fetch(newRequest);
   }
 
@@ -324,7 +324,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!key) return new Response("Not found", { status: 404 });
     if (key.startsWith("config/") || key.startsWith("backups/") || key.includes("..")) return forbidden();
     if (!key.startsWith(`${caller.workspaceId}/`)) return forbidden();
-    const object = await env.MEDIA.get(key);
+    const object = await env.replyloom_media.get(key);
     if (!object) return new Response("Not found", { status: 404 });
     const headers = new Headers();
     object.writeHttpMetadata(headers);
@@ -343,7 +343,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!key) return Response.json({ ok: false, error: "Missing key" }, { status: 400 });
     if (key.startsWith("config/") || key.startsWith("backups/") || key.includes("..")) return forbidden();
     if (!key.startsWith(`${caller.workspaceId}/`)) return forbidden();
-    await env.MEDIA.delete(key);
+    await env.replyloom_media.delete(key);
     return Response.json({ ok: true });
   }
 
@@ -400,7 +400,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   // recipient -- see src/broadcast.ts. The caller must own the campaign.
   const broadcastMatch = url.pathname.match(/^\/broadcast\/([A-Za-z0-9_-]+)\/start$/);
   if (request.method === "POST" && broadcastMatch) {
-    const db = createDb(env.DB);
+    const db = createDb(env.replyloom_db);
     try {
       const campaign = await db
         .select({ workspaceId: broadcastCampaigns.workspaceId })
@@ -452,7 +452,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       const { workspaceId, limit, offset, cursor } = parsed.data;
       const scopeError = assertCallerWorkspace(caller, workspaceId);
       if (scopeError) return scopeError;
-      const db = createDb(env.DB);
+      const db = createDb(env.replyloom_db);
       // Keyset on messages_workspace_wa_message_idx (workspace_id,
       // wa_message_id) when a cursor is given; offset kept for old callers.
       const base = db
@@ -576,7 +576,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         if (Object.keys(values).length === 0) {
           return Response.json({ ok: false, error: "No config fields provided" }, { status: 400 });
         }
-        const db = createDb(env.DB);
+        const db = createDb(env.replyloom_db);
         await db
           .insert(agentConfigs)
           .values({ workspaceId, ...values })
@@ -618,7 +618,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         if (!urlCheck.ok) {
           return Response.json({ ok: false, error: urlCheck.error }, { status: urlCheck.retryable ? 503 : 400 });
         }
-        const db = createDb(env.DB);
+        const db = createDb(env.replyloom_db);
         const params = typeof parameters === "string" ? parameters : JSON.stringify(parameters ?? {});
         const row = await db
           .insert(agentWebhookTools)
@@ -644,7 +644,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       if (!workspaceId) return Response.json({ ok: false, error: "Missing 'workspaceId'" }, { status: 400 });
       const scopeError = assertCallerWorkspace(caller, workspaceId);
       if (scopeError) return scopeError;
-      const db = createDb(env.DB);
+      const db = createDb(env.replyloom_db);
       await db
         .delete(agentWebhookTools)
         .where(and(eq(agentWebhookTools.id, delMatch[1]), eq(agentWebhookTools.workspaceId, workspaceId)));
@@ -709,7 +709,7 @@ const worker = {
       url.pathname.includes("/login") ||
       url.pathname.includes("/signup");
 
-    const rateLimiter = isAuthEndpoint ? env.AUTH_RATE_LIMITER : env.API_RATE_LIMITER;
+    const rateLimiter = isAuthEndpoint ? env.replyloom_auth_rate_limiter : env.replyloom_api_rate_limiter;
     const { success } = await rateLimiter.limit({ key: clientIp });
 
     if (!success) {
@@ -752,7 +752,7 @@ const worker = {
   // ── Queue consumer: one batch of staggered broadcast sends ──
   async queue(batch: MessageBatch<BroadcastQueueMessage>, env: Env): Promise<void> {
     try {
-      const db = createDb(env.DB);
+      const db = createDb(env.replyloom_db);
       await handleBroadcastBatch(batch, env, db);
     } catch (err) {
       // Rethrow after reporting so the queue's retry policy (max_retries: 2)
@@ -780,7 +780,7 @@ const worker = {
     // payload per message per webhook) older than 7 days. Bounded batches;
     // an index seek on (status, created_at) when there's nothing to do.
     ctx.waitUntil(
-      pruneWebhookDeliveries(createDb(env.DB)).catch((err) => captureError(err, { module: "webhook-prune" }))
+      pruneWebhookDeliveries(createDb(env.replyloom_db)).catch((err) => captureError(err, { module: "webhook-prune" }))
     );
   },
 };
@@ -815,8 +815,8 @@ const WATCHDOG_CURSOR_KEY = "watchdog:session-cursor";
  * sessions exist.
  */
 async function pokeSessionWatchdogs(env: Env) {
-  const db = createDb(env.DB);
-  const cursor = (await env.REPLY_CACHE.get(WATCHDOG_CURSOR_KEY).catch(() => null)) ?? "";
+  const db = createDb(env.replyloom_db);
+  const cursor = (await env.replyloom_reply_cache.get(WATCHDOG_CURSOR_KEY).catch(() => null)) ?? "";
   const rows = await db
     .select({ id: waSessions.id })
     .from(waSessions)
@@ -830,10 +830,10 @@ async function pokeSessionWatchdogs(env: Env) {
     .limit(WATCHDOG_SWEEP_BATCH)
     .all();
   const next = rows.length === WATCHDOG_SWEEP_BATCH ? rows[rows.length - 1].id : "";
-  await env.REPLY_CACHE.put(WATCHDOG_CURSOR_KEY, next).catch(() => {});
+  await env.replyloom_reply_cache.put(WATCHDOG_CURSOR_KEY, next).catch(() => {});
   await Promise.allSettled(
     rows.map((r) =>
-      env.WHATSAPP_SESSION.get(env.WHATSAPP_SESSION.idFromName(r.id)).fetch("http://do/internal/watchdog", {
+      env.replyloom_whatsapp_session.get(env.replyloom_whatsapp_session.idFromName(r.id)).fetch("http://do/internal/watchdog", {
         method: "POST",
       }),
     ),
@@ -841,6 +841,6 @@ async function pokeSessionWatchdogs(env: Env) {
 }
 
 function pokeScheduler(env: Env) {
-  const stub = env.SCHEDULER.get(env.SCHEDULER.idFromName("global"));
+  const stub = env.replyloom_scheduler.get(env.replyloom_scheduler.idFromName("global"));
   return stub.fetch("https://scheduler.internal/arm", { method: "POST" });
 }

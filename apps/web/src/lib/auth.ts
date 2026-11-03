@@ -52,7 +52,7 @@ async function ensureWorkspace(userId: string, userName: string) {
   // "owner" role — line it up with our seeded "Owner" role name so the
   // Team settings page shows one consistent role, not two spellings of
   // the same thing.
-  const db = createDb(env.DB)
+  const db = createDb(env.replyloom_db)
   await db
     .update(member)
     .set({ role: "Owner" })
@@ -63,7 +63,7 @@ async function ensureWorkspace(userId: string, userName: string) {
 
 /** Seeds the Owner/Admin/Agent/Viewer starter roles for a brand-new workspace. */
 async function seedDefaultRoles(workspaceId: string) {
-  const db = createDb(env.DB)
+  const db = createDb(env.replyloom_db)
   await db.insert(roles).values(
     DEFAULT_ROLE_PRESETS.map((preset) => ({
       workspaceId,
@@ -76,7 +76,7 @@ async function seedDefaultRoles(workspaceId: string) {
 }
 
 async function getWorkspaceId(userId: string) {
-  const db = createDb(env.DB)
+  const db = createDb(env.replyloom_db)
   // Most-recently-joined membership wins. This app doesn't have a
   // workspace switcher yet, so when someone belongs to more than one
   // (their own personal workspace, plus any they've since accepted an
@@ -103,7 +103,7 @@ async function applyInvitation(
   userId: string,
   userEmail: string
 ): Promise<string> {
-  const db = createDb(env.DB)
+  const db = createDb(env.replyloom_db)
   const invite = await db
     .select()
     .from(invitation)
@@ -162,7 +162,7 @@ function toAuthUser(u: {
  * accounts gets through. Fails open if the binding is missing/erroring.
  */
 async function enforceAuthRateLimit(email: string) {
-  const limiter = (env as { AUTH_RATE_LIMITER?: RateLimit }).AUTH_RATE_LIMITER
+  const limiter = (env as { replyloom_auth_rate_limiter?: RateLimit }).replyloom_auth_rate_limiter
   if (!limiter) return
   let ip = "unknown"
   try {
@@ -326,7 +326,7 @@ export async function requirePermission(workspaceId: string, permission: string)
   if (!current?.user?.id || !current.workspaceId || current.workspaceId !== workspaceId) {
     throw new Error("Unauthorized")
   }
-  const db = createDb(env.DB)
+  const db = createDb(env.replyloom_db)
   const membership = await getMembershipCached(current.user.id, workspaceId)
   if (!membership) throw new Error("Unauthorized")
   const customRole = await db

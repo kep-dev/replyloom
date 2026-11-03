@@ -41,7 +41,7 @@ function likePattern(q: string) {
 }
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 type Db = ReturnType<typeof getDb>

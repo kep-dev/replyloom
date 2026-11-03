@@ -68,7 +68,7 @@ export async function handleAgentMessage(
   // ── 1) Cheap exact-match cache — zero model spend on repeat FAQs ──
   const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${normalize(message)}`;
   if (config.cacheTtlSeconds > 0) {
-    const cached = await env.REPLY_CACHE.get(cacheKey);
+    const cached = await env.replyloom_reply_cache.get(cacheKey);
     if (cached) {
       return { text: cached, usedTools: [], usedContext: [], blocked: false, cached: true };
     }
@@ -154,11 +154,11 @@ async function generateReply(
 
     let result: any;
     try {
-      result = await ctx.env.AI.run(ctx.config.models.generator, body, runOptions);
+      result = await ctx.env.replyloom_ai.run(ctx.config.models.generator, body, runOptions);
     } catch {
       // Primary model failed (after the gateway's own retries) — fail down to
       // a lighter model rather than letting the reply die for the customer.
-      result = await ctx.env.AI.run(FALLBACK_GENERATOR, body, runOptions);
+      result = await ctx.env.replyloom_ai.run(FALLBACK_GENERATOR, body, runOptions);
     }
 
     const toolCalls: any[] = result?.tool_calls ?? [];
@@ -209,7 +209,7 @@ async function loadConversationThread(
 ): Promise<string> {
   if (!input.conversationId) return "";
   try {
-    const db = createDb(env.DB);
+    const db = createDb(env.replyloom_db);
     const rows = await db
       .select({ direction: messages.direction, body: messages.body })
       .from(messages)
@@ -238,5 +238,5 @@ function normalize(message: string): string {
 }
 
 function cache(env: AgentEnv, config: AgentConfig, key: string, value: string): Promise<void> {
-  return env.REPLY_CACHE.put(key, value, { expirationTtl: config.cacheTtlSeconds }).catch(() => {});
+  return env.replyloom_reply_cache.put(key, value, { expirationTtl: config.cacheTtlSeconds }).catch(() => {});
 }

@@ -15,8 +15,8 @@ import { requireWorkspaceAccess, requirePermission, requireCurrentPermission } f
 import { fetchWaWorker } from "@/lib/wa-engine"
 
 // Agent surface for /automation. Everything that touches the engine worker's
-// bindings (Workers AI, Vectorize, REPLY_CACHE and its config cache) goes
-// through the WA_WORKER service binding — one place owns writes, clamps and
+// bindings (Workers AI, Vectorize, replyloom_reply_cache and its config cache) goes
+// through the replyloom_wa_worker service binding — one place owns writes, clamps and
 // cache invalidation. Read-only secondary tables (escalations, knowledge
 // base) are read straight from the shared D1, same as the rest of the CRM.
 async function callWorker(
@@ -225,7 +225,7 @@ export const getKnowledgeBase = createServerFn({ method: "POST" })
   .validator((data: { workspaceId: string }) => data)
   .handler(
     withSafeErrors(async ({ data }) => {
-      const db = createDb(env.DB)
+      const db = createDb(env.replyloom_db)
       // Aggregated in SQL (one row per doc) instead of pulling every chunk
       // row into JS to group them -- a large ingest is thousands of rows.
       // max(created_at) is the unixepoch integer drizzle stores for the
@@ -261,7 +261,7 @@ export const deleteKnowledgeDoc = createServerFn({ method: "POST" })
     withSafeErrors(async ({ data }) => {
       await requirePermission(data.workspaceId, "manage_settings")
       if (!data.docId && !data.source) throw new Error("Nothing to delete.")
-      const db = createDb(env.DB)
+      const db = createDb(env.replyloom_db)
       const conds = [eq(docChunks.workspaceId, data.workspaceId)]
       if (data.docId) conds.push(eq(docChunks.docId, data.docId))
       if (!data.docId && data.source)
@@ -286,7 +286,7 @@ export const getAgentEscalations = createServerFn({ method: "POST" })
   .validator((data: { workspaceId: string }) => data)
   .handler(
     withSafeErrors(async ({ data }) => {
-      const db = createDb(env.DB)
+      const db = createDb(env.replyloom_db)
       const rows = await db
         .select()
         .from(agentEscalations)
@@ -310,7 +310,7 @@ export const resolveAgentEscalation = createServerFn({ method: "POST" })
   .validator((data: { id: string }) => data)
   .handler(
     withSafeErrors(async ({ data }) => {
-      const db = createDb(env.DB)
+      const db = createDb(env.replyloom_db)
       const workspaceId = await requireCurrentPermission("send_messages")
       await db
         .update(agentEscalations)

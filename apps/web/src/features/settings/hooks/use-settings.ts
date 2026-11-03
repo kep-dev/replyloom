@@ -23,7 +23,7 @@ import { auth } from "@/lib/auth-server"
 import { requireCurrentPermission, requirePermission } from "@/lib/auth"
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 /** Resolves the signed-in user from the request's own session cookie --
@@ -108,7 +108,7 @@ export const uploadProfileImage = createServerFn({ method: "POST" })
       const bytes = Uint8Array.from(atob(data.base64), (c) => c.charCodeAt(0))
       const ext = (data.mime.split("/")[1] ?? "png").split(";")[0]
       const mediaKey = `user-avatars/${sessionUser.id}/${crypto.randomUUID()}.${ext}`
-      await env.MEDIA.put(mediaKey, bytes, {
+      await env.replyloom_media.put(mediaKey, bytes, {
         httpMetadata: { contentType: data.mime },
       })
 
@@ -126,7 +126,7 @@ export const uploadProfileImage = createServerFn({ method: "POST" })
           const prevKey = decodeURIComponent(
             new URL(prev).pathname.replace(/^\/media\//, "")
           )
-          if (prevKey.startsWith("user-avatars/")) await env.MEDIA.delete(prevKey)
+          if (prevKey.startsWith("user-avatars/")) await env.replyloom_media.delete(prevKey)
         } catch {
           // non-fatal -- unparseable/external URL left alone
         }

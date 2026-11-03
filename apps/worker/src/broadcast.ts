@@ -98,8 +98,8 @@ async function sendViaSession(
   mediaKey?: string,
   kind: "broadcast" | "scheduled" = "broadcast",
 ) {
-  const id = env.WHATSAPP_SESSION.idFromName(waSessionId);
-  const stub = env.WHATSAPP_SESSION.get(id);
+  const id = env.replyloom_whatsapp_session.idFromName(waSessionId);
+  const stub = env.replyloom_whatsapp_session.get(id);
   // /send-template handles both plain text and (when mediaKey is set) an
   // attachment pulled from R2 -- one endpoint covers both broadcast shapes.
   const res = await stub.fetch("http://do/send-template", {
@@ -126,7 +126,7 @@ type CampaignEvent =
 
 async function emitToSession(env: Env, waSessionId: string, event: CampaignEvent) {
   try {
-    const stub = env.WHATSAPP_SESSION.get(env.WHATSAPP_SESSION.idFromName(waSessionId));
+    const stub = env.replyloom_whatsapp_session.get(env.replyloom_whatsapp_session.idFromName(waSessionId));
     await stub.fetch("http://do/internal/emit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -139,7 +139,7 @@ async function emitToSession(env: Env, waSessionId: string, event: CampaignEvent
 
 /** Re-enqueues a broadcast message with its own delay, capped to the Queues limit. */
 async function requeue(env: Env, body: BroadcastQueueMessage, delaySeconds: number) {
-  await env.BROADCAST_QUEUE.send(body, { delaySeconds: Math.min(Math.max(delaySeconds, 0), MAX_DELAY_SECONDS) });
+  await env.replyloom_broadcast_queue.send(body, { delaySeconds: Math.min(Math.max(delaySeconds, 0), MAX_DELAY_SECONDS) });
 }
 
 /** One keyset page of a campaign's still-pending contact recipients.
@@ -279,7 +279,7 @@ export async function startCampaign(db: Db, env: Env, campaignId: string) {
       // per recipient (a 5,000-recipient campaign was 5,000 sequential sends in
       // one invocation -- far past the Worker subrequest budget).
       for (let i = 0; i < pending.length; i += QUEUE_BATCH_SIZE) {
-        await env.BROADCAST_QUEUE.sendBatch(pending.slice(i, i + QUEUE_BATCH_SIZE));
+        await env.replyloom_broadcast_queue.sendBatch(pending.slice(i, i + QUEUE_BATCH_SIZE));
       }
       enqueued += rows.length;
     }

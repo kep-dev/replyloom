@@ -19,7 +19,8 @@ BACKUP_BUCKET="whatsapp-ai-backups"
 QUEUE_NAME="wa-broadcast-dispatch"
 VECTORIZE_INDEX="wa-messages"
 AGENT_VECTORIZE_INDEX="wa-docs"
-KV_BINDING="REPLY_CACHE"
+KV_NAMESPACE_NAME="REPLY_CACHE"
+KV_BINDING="replyloom_reply_cache"
 
 # Create wrangler.jsonc / .env.production from the templates if missing.
 node scripts/config.mjs
@@ -55,11 +56,16 @@ if [ "$CURRENT_DB_ID" = "REPLACE_WITH_D1_DATABASE_ID" ] || [ -z "$CURRENT_DB_ID"
     DB_ID="$EXISTING"
     echo "    found existing database, id=$DB_ID"
   else
-    OUTPUT=$(wrangler d1 create "$DB_NAME" --json)
-    DB_ID=$(echo "$OUTPUT" | node -e "
+    # D1 create prints a binding snippet, not JSON. Resolve the id from list.
+    wrangler d1 create "$DB_NAME" --update-config=false
+    DB_ID=$(wrangler d1 list --json | node -e "
       let s = '';
       process.stdin.on('data', (d) => { s += d; });
-      process.stdin.on('end', () => console.log(JSON.parse(s).uuid));
+      process.stdin.on('end', () => {
+        const db = JSON.parse(s).find((d) => d.name === '$DB_NAME');
+        if (!db) process.exit(1);
+        console.log(db.uuid);
+      });
     ")
     echo "    created database, id=$DB_ID"
   fi
@@ -110,25 +116,39 @@ for INDEX in "$VECTORIZE_INDEX" "$AGENT_VECTORIZE_INDEX"; do
   else
     wrangler vectorize create "$INDEX" --dimensions=1024 --metric=cosine
   fi
+
+  # Both search and RAG filter by workspaceId. Index it before any vectors arrive.
+  if wrangler vectorize list-metadata-index "$INDEX" --json | node -e "
+    let s = '';
+    process.stdin.on('data', (d) => { s += d; });
+    process.stdin.on('end', () => {
+      const indexes = JSON.parse(s);
+      process.exit(indexes.some((index) => index.propertyName === 'workspaceId' && String(index.indexType).toLowerCase() === 'string') ? 0 : 1);
+    });
+  "; then
+    echo "    workspaceId metadata index already exists"
+  else
+    wrangler vectorize create-metadata-index "$INDEX" --propertyName=workspaceId --type=string
+  fi
 done
 
 # ── KV namespace (AI agent reply cache) ──────────────────────────────────
-echo "==> KV namespace ($KV_BINDING)..."
+echo "==> KV namespace ($KV_NAMESPACE_NAME, binding $KV_BINDING)..."
 CURRENT_KV_ID=$(grep -A2 '"kv_namespaces"' "$WORKER_CONFIG" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID" ]; then
-  if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$KV_BINDING\""; then
-    wrangler kv namespace create "$KV_BINDING" >/dev/null
+  if ! wrangler kv namespace list 2>/dev/null | grep -q "\"title\": *\"$KV_NAMESPACE_NAME\""; then
+    wrangler kv namespace create "$KV_NAMESPACE_NAME" --binding "$KV_BINDING" --update-config=false >/dev/null
     echo "    created namespace"
   else
     echo "    found existing namespace"
   fi
-  KV_ID=$(wrangler kv namespace list --json 2>/dev/null | node -e "
+  KV_ID=$(wrangler kv namespace list 2>/dev/null | node -e "
     let s = '';
     process.stdin.on('data', (d) => { s += d; });
     process.stdin.on('end', () => {
       try {
         const list = JSON.parse(s);
-        const ns = list.find((n) => n.title === '$KV_BINDING');
+        const ns = list.find((n) => n.title === '$KV_NAMESPACE_NAME');
         if (ns) console.log(ns.id);
       } catch {}
     });
@@ -212,4 +232,4 @@ fi
 
 echo ""
 echo "Setup complete. Next: set your URLs (BETTER_AUTH_URL in $WEB_CONFIG, CORS_ORIGIN in $WORKER_CONFIG,"
-echo "VITE_ENGINE_URL in both $WEB_CONFIG and $WEB_DIR/.env.production), then run 'pnpm deploy'."
+echo "VITE_ENGINE_URL in both $WEB_CONFIG and $WEB_DIR/.env.production), then run 'pnpm run deploy'."

@@ -342,7 +342,7 @@ function runCli() {
       let src = readFileSync(join(root, tpl), "utf8");
       if (dst.endsWith(".jsonc")) {
         src = set(src, "database_id", process.env.D1_DATABASE_ID);
-        src = src.replace(/("binding": "REPLY_CACHE", "id": )"[^"]*"/, `$1${JSON.stringify(process.env.KV_NAMESPACE_ID)}`);
+        src = src.replace(/("binding": "replyloom_reply_cache", "id": )"[^"]*"/, `$1${JSON.stringify(process.env.KV_NAMESPACE_ID)}`);
         src = set(src, "BETTER_AUTH_URL", app);
         src = set(src, "VITE_ENGINE_URL", engine);
         src = set(src, "CORS_ORIGIN", app);

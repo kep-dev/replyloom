@@ -41,7 +41,7 @@ async function requireOwnedContact(
 }
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 const CONTACTS_PINNED_MAX = 100

@@ -37,7 +37,7 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
   if (!config.enabled) return null;
   if (params.isGroup && !config.replyInGroups) return null;
 
-  const db = createDb(env.DB);
+  const db = createDb(env.replyloom_db);
   if (await isBlocked(db, params.workspaceId, params.waSessionId, "auto_reply", params.senderJid)) return null;
 
   // Rate-limit BEFORE doing any expensive work (classifier/RAG/generation).
@@ -48,7 +48,7 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
   const rlKey = `agent:rl:${params.workspaceId}:${bucket}`;
   let count = 0;
   try {
-    const parsed = Number((await env.REPLY_CACHE.get(rlKey)) ?? 0);
+    const parsed = Number((await env.replyloom_reply_cache.get(rlKey)) ?? 0);
     count = Number.isFinite(parsed) ? parsed : 0;
   } catch {
     count = 0;
@@ -62,7 +62,7 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
   // stable typing, so this is a soft, best-effort limiter — the classifier
   // gate + per-message spend caps are the real backstops).
   count += 1;
-  await env.REPLY_CACHE
+  await env.replyloom_reply_cache
     .put(rlKey, String(count), { expirationTtl: RATE_WINDOW_SECONDS })
     .catch(() => {});
 

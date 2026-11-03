@@ -24,7 +24,7 @@ import { requirePermission, requireWorkspaceAccess } from "@/lib/auth"
 import { getSessionCached } from "@/lib/session-cache"
 
 function getDb() {
-  return createDb(env.DB)
+  return createDb(env.replyloom_db)
 }
 
 export { PERMISSIONS }

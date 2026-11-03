@@ -60,7 +60,7 @@ export class Scheduler implements DurableObject {
 
   async alarm(): Promise<void> {
     try {
-      const db = createDb(this.env.DB);
+      const db = createDb(this.env.replyloom_db);
       await Promise.all([
         dispatchDueScheduledMessages(db, this.env),
         dispatchDueCampaigns(db, this.env),
@@ -86,7 +86,7 @@ export class Scheduler implements DurableObject {
   }
 
   private async earliestDueMs(): Promise<number | null> {
-    const db = createDb(this.env.DB);
+    const db = createDb(this.env.replyloom_db);
     const [nextMessage, nextCampaign, pendingRetry] = await Promise.all([
       db
         .select({ dueAt: scheduledMessages.sendAt })

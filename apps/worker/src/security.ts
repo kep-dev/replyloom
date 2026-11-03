@@ -6,7 +6,7 @@
 // proxy (which the user's browser talks to) or a holder of a per-workspace
 // API key:
 //
-//   1. INTERNAL  — apps/web calls the engine through its `WA_WORKER` service
+//   1. INTERNAL  — apps/web calls the engine through its `replyloom_wa_worker` service
 //      binding. The web worker attaches `Authorization: Bearer
 //      <ENGINE_INTERNAL_SECRET>` plus `X-Engine-Workspace: <workspaceId>`.
 //      The engine resolves this to an "internal" caller scoped to exactly
@@ -82,7 +82,7 @@ export async function resolveCaller(env: Env, request: Request): Promise<Caller 
   const authHeader = request.headers.get("Authorization") ?? "";
   const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
 
-  // Internal secret (web proxy, via the WA_WORKER binding). Only meaningful
+  // Internal secret (web proxy, via the replyloom_wa_worker binding). Only meaningful
   // together with the workspace the web app resolved from the session.
   if (bearer && timingSafeEqual(bearer, env.ENGINE_INTERNAL_SECRET)) {
     const workspaceId = request.headers.get("X-Engine-Workspace");
@@ -101,7 +101,7 @@ export async function resolveCaller(env: Env, request: Request): Promise<Caller 
     // within that window). lastUsedAt is written at most once per
     // LAST_USED_WRITE_MS per key instead of one D1 write per API request.
     const key = await apiKeyCache.get(sha, async () => {
-      const db = createDb(env.DB);
+      const db = createDb(env.replyloom_db);
       const row = await db
         .select({ id: apiKeys.id, workspaceId: apiKeys.workspaceId, lastUsedAt: apiKeys.lastUsedAt })
         .from(apiKeys)
@@ -114,7 +114,7 @@ export async function resolveCaller(env: Env, request: Request): Promise<Caller 
     if (Date.now() - lastUsed > LAST_USED_WRITE_MS) {
       key.lastUsedAt = new Date();
       // Best-effort; never fail the request on a write error.
-      await createDb(env.DB)
+      await createDb(env.replyloom_db)
         .update(apiKeys)
         .set({ lastUsedAt: key.lastUsedAt })
         .where(eq(apiKeys.id, key.id))

@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers"
 /**
  * Routes a request to apps/worker.
  *
- * In every deployed environment `env.WA_WORKER` is a real Cloudflare
+ * In every deployed environment `env.replyloom_wa_worker` is a real Cloudflare
  * service binding and this always takes that path.
  *
  * In local dev it can't: `@cloudflare/vite-plugin` only resolves a
@@ -21,7 +21,7 @@ import { env } from "cloudflare:workers"
 export function fetchWaWorker(path: string, init?: RequestInit): Promise<Response> {
   const localUrl = (env as typeof env & { ENGINE_LOCAL_URL?: string }).ENGINE_LOCAL_URL
   if (localUrl) return fetch(`${localUrl}${path}`, init)
-  return env.WA_WORKER.fetch(`https://wa-worker${path}`, init)
+  return env.replyloom_wa_worker.fetch(`https://wa-worker${path}`, init)
 }
 
 export function buildEngineHeaders(

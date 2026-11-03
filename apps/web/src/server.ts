@@ -3,8 +3,8 @@ import handler from "@tanstack/react-start/server-entry";
 import { scrubSentryEvent } from "@workspace/db/sentry-scrub";
 
 type AppEnv = Env & {
-  WEB_RATE_LIMITER?: RateLimit;
-  AUTH_RATE_LIMITER?: RateLimit;
+  replyloom_web_rate_limiter?: RateLimit;
+  replyloom_auth_rate_limiter?: RateLimit;
   SENTRY_DSN?: string;
 };
 
@@ -69,10 +69,10 @@ const app = {
     const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
 
     if (request.method === "POST" && AUTH_SENSITIVE.test(url.pathname)) {
-      if (await limited(env.AUTH_RATE_LIMITER, `auth:${ip}`)) return tooMany();
+      if (await limited(env.replyloom_auth_rate_limiter, `auth:${ip}`)) return tooMany();
     }
     if (url.pathname.startsWith("/_serverFn") || url.pathname.startsWith("/api/")) {
-      if (await limited(env.WEB_RATE_LIMITER, `web:${ip}`)) return tooMany();
+      if (await limited(env.replyloom_web_rate_limiter, `web:${ip}`)) return tooMany();
     }
 
     // @ts-expect-error - handler is not typed as a Cloudflare handler
