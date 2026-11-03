@@ -25,6 +25,7 @@ import { scopedLogger } from "./logger";
 import { captureError } from "./error-tracking";
 import { publicMessage, publicStatus } from "./errors";
 import { readJson } from "./json";
+import { listSessionGroups } from "./session-groups";
 import * as Sentry from "@sentry/cloudflare";
 import { scrubSentryEvent } from "@workspace/db/sentry-scrub";
 
@@ -282,6 +283,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     // own UI (caller.kind === "internal") are exempt: a person replying
     // to an inbound conversation from the inbox must still work even if
     // that contact previously opted out of *broadcasts*.
+    if (request.method === "GET" && subPath === "/groups") {
+      return listSessionGroups(env.replyloom_db, session.workspaceId, sessionId, url.searchParams);
+    }
+
     const SEND_SUBPATHS = new Set(["/send", "/send-template", "/send-media"]);
     if (caller.kind === "api" && SEND_SUBPATHS.has(subPath) && request.method === "POST") {
       const to = await peekOutboundTarget(request);
@@ -671,6 +676,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         note: "All endpoints except /health require the internal engine secret (web app) or a per-workspace API key (Authorization: Bearer wa_...).",
         health: "GET /health",
         session_status: "GET /session/:id",
+        session_groups: "GET /session/:id/groups?limit=100&cursor=...",
         connect: "POST /session/:id/connect",
         disconnect: "POST /session/:id/disconnect",
         send_message: "POST /session/:id/send  { to, text }",
