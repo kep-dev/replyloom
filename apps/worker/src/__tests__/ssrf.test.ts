@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   assertSafeOutboundUrl,
   assertSafeOutboundUrlWithDns,
@@ -135,6 +135,16 @@ describe("assertSafeOutboundUrlWithDns (DoH DNS rebinding defense)", () => {
         "2606:2800:220:1:248:1893:25c8:1946",
       ]);
     }
+  });
+
+  it("rejects DNS redirects using Workers' manual redirect mode", async () => {
+    const dnsFetch = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) =>
+      Response.redirect("https://dns.example.org/query"));
+    const res = await assertSafeOutboundUrlWithDns("https://hooks.example.org/notify", {
+      dnsFetch,
+    });
+    expect(dnsFetch.mock.calls.map(([, options]) => options?.redirect)).toEqual(["manual", "manual"]);
+    expect(res).toMatchObject({ ok: false, retryable: true });
   });
 
   it("blocks a hostname whose A record resolves to a private or metadata IP", async () => {

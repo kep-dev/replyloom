@@ -17,7 +17,10 @@
   "alias": {
     "ws": "./src/compat/ws-shim.ts"
   },
+  "images": { "binding": "replyloom_patrol_images" },
   "vars": {
+    // Comma-separated HTTPS report hostnames eligible for patrol link previews.
+    "PATROL_LINK_PREVIEW_HOSTS": "",
     // AI Gateway id for every model call (classifier, generator, embeddings).
     // Leave as "default" to use the account's auto-provisioned gateway; set a
     // named gateway once you create one in the dashboard.

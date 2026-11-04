@@ -31,6 +31,7 @@ import { storeOutgoingMedia, mediaTypeFromMime } from "../media";
 import { processLiveMessage, syncMessagesFromHistory } from "./message-events";
 import { syncContactUpsert, syncContactsFromHistory, syncGroupsFromHistory, syncDirectChatsFromHistory } from "./contact-events";
 import { TtlCache } from "../ttl-cache";
+import { patrolLinkPreview } from "./patrol-link-preview";
 import {
   AutoReplyLimiter,
   MAX_QUEUE_WAIT_MS,
@@ -925,7 +926,8 @@ export class WhatsAppSession implements DurableObject {
         "info",
         `POST /send: socket=${!!this.socket} state=${this.connectionState} intentionalDisconnect=${this.intentionalDisconnect}`
       );
-      if (!this.socket) {
+      const socket = this.socket;
+      if (!socket) {
         this.log("warn", `POST /send REJECTED: socket is null. State: ${this.connectionState}`);
         return Response.json(
           {
@@ -949,9 +951,15 @@ export class WhatsAppSession implements DurableObject {
         if (isLidJid(jid)) {
           this.log("warn", `Cannot resolve LID JID ${body.to} to phone JID — send may fail`);
         }
+        // The router already authorized the session. Finish optional network I/O
+        // before taking a pacing token so delayed previews cannot bunch sends.
+        const linkPreview = await patrolLinkPreview(body.text, this.env.PATROL_LINK_PREVIEW_HOSTS, this.env.replyloom_patrol_images);
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
-        const result = await this.socket.sendMessage(jid, { text: body.text });
+        if (this.socket !== socket) {
+          return Response.json({ ok: false, error: "Socket disconnected before sending.", hasSocket: false }, { status: 400 });
+        }
+        const result = await socket.sendMessage(jid, { text: body.text, linkPreview });
 
         // Write the outbound message to D1 immediately — the CRM inbox
         // shouldn't wait on messages.upsert to echo our own send back.

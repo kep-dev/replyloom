@@ -357,7 +357,8 @@ export async function assertSafeOutboundUrlWithDns(
     const endpoint = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=${type}`;
     const res = await dnsFetch(endpoint, {
       headers: { Accept: "application/dns-json" },
-      redirect: "error",
+      // Workers supports manual/follow. The status check below rejects redirects.
+      redirect: "manual",
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) {

@@ -60,6 +60,8 @@ async function peekOutboundTarget(request: Request): Promise<string | null> {
 const log = scopedLogger("worker");
 
 export interface Env {
+  PATROL_LINK_PREVIEW_HOSTS?: string;
+  replyloom_patrol_images?: ImagesBinding;
   replyloom_whatsapp_session: DurableObjectNamespace;
   replyloom_scheduler: DurableObjectNamespace;
   replyloom_db: D1Database;
