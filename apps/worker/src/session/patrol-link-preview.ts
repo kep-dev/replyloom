@@ -1,10 +1,14 @@
-import type { WAUrlInfo } from "@whiskeysockets/baileys";
+import { prepareWAMessageMedia } from "@whiskeysockets/baileys";
+import type { WAMediaUploadFunction, WAUrlInfo } from "@whiskeysockets/baileys";
 import { assertSafeOutboundUrlWithDns } from "../security";
 
 const PREVIEW_TIMEOUT_MS = 4_000;
+const LARGE_PREVIEW_TIMEOUT_MS = 6_000;
+const THUMBNAIL_UPLOAD_TIMEOUT_MS = 3_000;
 const MAX_HTML_BYTES = 128 * 1024;
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const MAX_THUMBNAIL_BYTES = 64 * 1024;
+const MAX_LARGE_THUMBNAIL_BYTES = 256 * 1024;
 const HTML_ENTITIES: Readonly<Record<string, string>> = {
   "&amp;": "&",
   "&quot;": '"',
@@ -69,9 +73,23 @@ async function readPreviewBytes(response: Response, mime: RegExp, limit: number)
   }
 }
 
+async function resizeJpeg(images: ImagesBinding, source: ArrayBuffer, size: number, limit: number): Promise<Buffer | null> {
+  const input = new Response(source);
+  if (!input.body) return null;
+  const transformed = await images.input(input.body)
+    .transform({ width: size, height: size, fit: "scale-down" })
+    .output({ format: "image/jpeg", quality: 70 });
+  const jpeg = await readPreviewBytes(transformed.response(), /^image\/jpeg$/, limit);
+  if (!jpeg) return null;
+  const header = new Uint8Array(jpeg, 0, Math.min(3, jpeg.byteLength));
+  return header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff ? Buffer.from(jpeg) : null;
+}
+
+type PatrolPreview = { preview: WAUrlInfo & { jpegThumbnail: Buffer }; source: ArrayBuffer };
+
 async function buildPreview(
   report: URL, matchedText: string, images: ImagesBinding, signal: AbortSignal,
-): Promise<WAUrlInfo | null> {
+): Promise<PatrolPreview | null> {
   const options: RequestInit = { redirect: "manual", cache: "no-store", signal };
   if (!(await assertSafeOutboundUrlWithDns(report.href, { timeoutMs: 1_000 })).ok) return null;
   const html = await readPreviewBytes(await fetch(report.href, options), /^text\/html$/, MAX_HTML_BYTES);
@@ -97,45 +115,79 @@ async function buildPreview(
   const source = await readPreviewBytes(await fetch(photo.href, options), /^image\/(?:jpeg|png|webp)$/, MAX_SOURCE_BYTES);
   if (!source) return null;
   signal.throwIfAborted();
-  const input = new Response(source);
-  if (!input.body) return null;
-  const transformed = await images.input(input.body)
-    .transform({ width: 320, height: 320, fit: "scale-down" })
-    .output({ format: "image/jpeg", quality: 70 });
-  const jpeg = await readPreviewBytes(transformed.response(), /^image\/jpeg$/, MAX_THUMBNAIL_BYTES);
+  const jpeg = await resizeJpeg(images, source, 320, MAX_THUMBNAIL_BYTES);
   if (!jpeg || signal.aborted) return null;
-  const header = new Uint8Array(jpeg, 0, Math.min(3, jpeg.byteLength));
-  if (header[0] !== 0xff || header[1] !== 0xd8 || header[2] !== 0xff) return null;
 
   return {
-    "canonical-url": report.href,
-    "matched-text": matchedText,
-    title,
-    jpegThumbnail: Buffer.from(jpeg),
+    preview: { "canonical-url": report.href, "matched-text": matchedText, title, jpegThumbnail: jpeg },
+    source,
   };
 }
 
-export async function patrolLinkPreview(text: string, configuredHosts?: string, images?: ImagesBinding): Promise<WAUrlInfo | null> {
+async function withPreviewTimeout<T>(work: (signal: AbortSignal) => Promise<T>, fallback: T, timeoutMs: number): Promise<T> {
+  const signal = AbortSignal.timeout(timeoutMs);
+  let onAbort: () => void = () => {};
+  const timeout = new Promise<T>(resolve => {
+    onAbort = () => resolve(fallback);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([work(signal), timeout]);
+  } catch {
+    // Optional preview errors may contain signed URLs or media upload credentials.
+    return fallback;
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
+async function withUploadedThumbnail(
+  { preview, source }: PatrolPreview, images: ImagesBinding, upload: WAMediaUploadFunction,
+): Promise<WAUrlInfo> {
+  return withPreviewTimeout(async signal => {
+    const largeJpeg = await resizeJpeg(images, source, 800, MAX_LARGE_THUMBNAIL_BYTES);
+    if (!largeJpeg) return preview;
+    signal.throwIfAborted();
+    const input = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(largeJpeg);
+        controller.close();
+      },
+    });
+    const size = await images.info(input);
+    if (!("width" in size) || !size.width || !size.height) return preview;
+    signal.throwIfAborted();
+    // Baileys uses the encrypted thumbnail reference to build the full-size link card.
+    const { imageMessage } = await prepareWAMessageMedia({
+      image: largeJpeg,
+      mimetype: "image/jpeg",
+      width: size.width,
+      height: size.height,
+      jpegThumbnail: preview.jpegThumbnail.toString("base64"),
+    }, {
+      mediaTypeOverride: "thumbnail-link",
+      mediaUploadTimeoutMs: THUMBNAIL_UPLOAD_TIMEOUT_MS,
+      upload: (file, options) => {
+        signal.throwIfAborted();
+        return upload(file, options);
+      },
+    });
+    return imageMessage?.directPath ? { ...preview, highQualityThumbnail: imageMessage } : preview;
+  }, preview, LARGE_PREVIEW_TIMEOUT_MS);
+}
+
+export async function patrolLinkPreview(
+  text: string, configuredHosts?: string, images?: ImagesBinding, upload?: WAMediaUploadFunction,
+): Promise<WAUrlInfo | null> {
   if (!configuredHosts?.trim() || !images) return null;
   const hosts = new Set(configuredHosts.split(",").map(host => host.trim().toLowerCase()));
   for (const [matchedText] of text.matchAll(/https:\/\/[^\s<>"]+/gi)) {
     const report = signedUrl(matchedText);
     if (!report || !hosts.has(report.hostname) || !/^\/result\/\d+$/.test(report.pathname)) continue;
 
-    const signal = AbortSignal.timeout(PREVIEW_TIMEOUT_MS);
-    let onAbort: () => void = () => {};
-    const timeout = new Promise<null>(resolve => {
-      onAbort = () => resolve(null);
-      signal.addEventListener("abort", onAbort, { once: true });
-    });
-    try {
-      return await Promise.race([buildPreview(report, matchedText, images, signal), timeout]);
-    } catch {
-      // Preview fetch is optional. Fetch errors may contain the signed URL.
-      return null;
-    } finally {
-      signal.removeEventListener("abort", onAbort);
-    }
+    const card = await withPreviewTimeout(signal => buildPreview(report, matchedText, images, signal), null, PREVIEW_TIMEOUT_MS);
+    if (!card) return null;
+    return upload ? withUploadedThumbnail(card, images, upload) : card.preview;
   }
   return null;
 }

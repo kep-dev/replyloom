@@ -34,7 +34,8 @@ function mockImages() {
   const output = vi.fn().mockResolvedValue({ response });
   const transform = vi.fn(() => ({ output }));
   const input = vi.fn(() => ({ transform }));
-  return { binding: { input } as unknown as ImagesBinding, input, transform, output, response };
+  const info = vi.fn().mockResolvedValue({ format: "image/jpeg", width: 800, height: 600 });
+  return { binding: { input, info } as unknown as ImagesBinding, input, transform, output, response };
 }
 
 beforeEach(() => {
@@ -70,6 +71,38 @@ describe("patrol link preview", () => {
     expect(images.output).toHaveBeenCalledWith({ format: "image/jpeg", quality: 70 });
     expect(fetch.mock.calls[0][1].redirect).toBe("manual");
     expect(fetch.mock.calls[1][1].signal).toBe(fetch.mock.calls[0][1].signal);
+  });
+
+  it("adds the encrypted thumbnail reference and dimensions for a large card", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(html())
+      .mockResolvedValueOnce(new Response(jpeg, { headers: { "content-type": "image/jpeg" } })));
+    const upload = vi.fn().mockResolvedValue({
+      mediaUrl: "https://cdn.example.com/thumbnail",
+      directPath: "/thumbnail",
+    });
+    const images = mockImages();
+    const linkPreview = await patrolLinkPreview(text, host, images.binding, upload);
+    const message = await generateWAMessageContent({ text, linkPreview }, { upload: vi.fn() });
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(images.transform).toHaveBeenNthCalledWith(1, { width: 320, height: 320, fit: "scale-down" });
+    expect(images.transform).toHaveBeenNthCalledWith(2, { width: 800, height: 800, fit: "scale-down" });
+    expect(message.extendedTextMessage).toMatchObject({
+      thumbnailDirectPath: "/thumbnail",
+      thumbnailWidth: 800,
+      thumbnailHeight: 600,
+      mediaKey: expect.any(Uint8Array),
+      thumbnailEncSha256: expect.any(Uint8Array),
+      jpegThumbnail: Buffer.from(jpeg),
+    });
+  });
+
+  it("keeps the compact preview when uploading the large thumbnail fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(html())
+      .mockResolvedValueOnce(new Response(jpeg, { headers: { "content-type": "image/jpeg" } })));
+    const upload = vi.fn().mockRejectedValue(new Error("upload failed"));
+    const preview = await patrolLinkPreview(text, host, mockImages().binding, upload);
+    expect(preview?.jpegThumbnail).toEqual(Buffer.from(jpeg));
+    expect(preview?.highQualityThumbnail).toBeUndefined();
   });
 
   it.each([undefined, "", "other.example.com"])("skips fetches when the report host is disabled (%s)", async hosts => {

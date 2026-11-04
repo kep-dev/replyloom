@@ -953,13 +953,19 @@ export class WhatsAppSession implements DurableObject {
         }
         // The router already authorized the session. Finish optional network I/O
         // before taking a pacing token so delayed previews cannot bunch sends.
-        const linkPreview = await patrolLinkPreview(body.text, this.env.PATROL_LINK_PREVIEW_HOSTS, this.env.replyloom_patrol_images);
+        const linkPreview = await patrolLinkPreview(
+          body.text, this.env.PATROL_LINK_PREVIEW_HOSTS, this.env.replyloom_patrol_images, socket.waUploadToServer,
+        );
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         if (this.socket !== socket) {
           return Response.json({ ok: false, error: "Socket disconnected before sending.", hasSocket: false }, { status: 400 });
         }
         const result = await socket.sendMessage(jid, { text: body.text, linkPreview });
+        if (linkPreview) {
+          const large = linkPreview.highQualityThumbnail;
+          this.log("info", large ? "Patrol link preview: uploaded " + large.width + "x" + large.height : "Patrol link preview: compact");
+        }
 
         // Write the outbound message to D1 immediately — the CRM inbox
         // shouldn't wait on messages.upsert to echo our own send back.
