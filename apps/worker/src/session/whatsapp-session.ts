@@ -3,7 +3,7 @@ import { makeWASocket, DisconnectReason, initAuthCreds, Browsers, BufferJSON } f
 import type { AuthenticationState, AuthenticationCreds, SignalKeyStore, WASocket } from "@whiskeysockets/baileys";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 import QRCode from "qrcode";
-import { createDb,  and, eq, sql, messages, conversations, contacts, waSessions } from "@workspace/db";
+import { createDb } from "@workspace/db";
 import type {Db} from "@workspace/db";
 import type { Env } from "../index";
 import { publicMessage, publicStatus } from "../errors";
@@ -30,7 +30,6 @@ import type {MessageStatus} from "../db/sync";
 import { storeOutgoingMedia, mediaTypeFromMime } from "../media";
 import { processLiveMessage, syncMessagesFromHistory } from "./message-events";
 import { syncContactUpsert, syncContactsFromHistory, syncGroupsFromHistory, syncDirectChatsFromHistory } from "./contact-events";
-import { TtlCache } from "../ttl-cache";
 import { patrolLinkPreview } from "./patrol-link-preview";
 import {
   AutoReplyLimiter,
@@ -38,12 +37,9 @@ import {
   OUTBOUND_BURST,
   OUTBOUND_PER_SEC,
   TokenBucket,
-  dayKey,
-  newChatDailyCap,
   parseSendKind
   
 } from "./outbound-guard";
-import type {SendKind} from "./outbound-guard";
 
 // Pretty-prints a Baileys pino-logger argument for our own log stream.
 // Was `String(x)` for every arg, which turns any object Baileys logs
@@ -172,9 +168,6 @@ const WATCHDOG_JITTER_MS = 30_000;
 // only runs when the last one is older than this -- otherwise a deploy
 // (every number reconnecting) turns into a D1 write storm.
 const FULL_GROUP_SYNC_MIN_INTERVAL_MS = 6 * 60 * 60_000;
-
-// "Has this person ever written to us?" -- once true it stays true.
-const warmChatCache = new TtlCache<boolean>(60 * 60_000);
 
 export class WhatsAppSession implements DurableObject {
   private state: DurableObjectState;
@@ -408,16 +401,12 @@ export class WhatsAppSession implements DurableObject {
   // ── Anti-ban outbound guard (see session/outbound-guard.ts) ──
   private outboundBucket = new TokenBucket(OUTBOUND_BURST, OUTBOUND_PER_SEC);
   private autoReplyLimiter = new AutoReplyLimiter();
-  private sessionCreatedAt: Date | null | undefined = undefined;
-
   /**
    * Called before every new outbound message. Returns a 429 Response to send
-   * back instead, or null to go ahead. Pace applies to every kind; the
-   * new-chat cap to agent/API/scheduled sends (broadcasts have their own
-   * daily cap + list rules; auto-replies only ever answer inbound).
+   * back instead, or null to go ahead. Pace applies to every send kind.
    */
-  private async guardOutbound(jid: string, request: Request | null, kindOverride?: SendKind): Promise<Response | null> {
-    const kind = kindOverride ?? parseSendKind(request?.headers.get("X-Send-Kind"));
+  private async guardOutbound(request: Request): Promise<Response | null> {
+    const kind = parseSendKind(request.headers.get("X-Send-Kind"));
     let wait = this.outboundBucket.take();
     if (wait > 0 && wait <= MAX_QUEUE_WAIT_MS) {
       await new Promise((resolve) => setTimeout(resolve, wait));
@@ -435,9 +424,6 @@ export class WhatsAppSession implements DurableObject {
         { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
       );
     }
-    if ((kind === "manual" || kind === "api" || kind === "scheduled") && !jid.endsWith("@g.us")) {
-      return this.checkNewChatCap(jid);
-    }
     return null;
   }
 
@@ -448,58 +434,6 @@ export class WhatsAppSession implements DurableObject {
       return false;
     }
     return this.outboundBucket.take() === 0;
-  }
-
-  private async hasInboundHistory(jid: string): Promise<boolean> {
-    return warmChatCache.get(`${this.sessionIdName}|${jid}`, async () => {
-      const row = await this.db
-        .select({ one: sql<number>`1` })
-        .from(messages)
-        .innerJoin(conversations, eq(conversations.id, messages.conversationId))
-        .innerJoin(contacts, eq(contacts.id, conversations.contactId))
-        .where(
-          and(
-            eq(contacts.waSessionId, this.sessionIdName),
-            eq(contacts.jid, jid),
-            eq(messages.direction, "in")
-          )
-        )
-        .limit(1)
-        .get();
-      return !!row;
-    });
-  }
-
-  private async checkNewChatCap(jid: string): Promise<Response | null> {
-    if (await this.hasInboundHistory(jid)) return null; // they wrote to us: not a cold chat
-    if (this.sessionCreatedAt === undefined) {
-      const row = await this.db
-        .select({ createdAt: waSessions.createdAt })
-        .from(waSessions)
-        .where(eq(waSessions.id, this.sessionIdName))
-        .get()
-        .catch(() => undefined);
-      this.sessionCreatedAt = row?.createdAt ? new Date(row.createdAt) : null;
-    }
-    const cap = newChatDailyCap(this.sessionCreatedAt);
-    const key = `newchats:${dayKey()}`;
-    const today = (await this.state.storage.get<string[]>(key)) ?? [];
-    if (today.includes(jid)) return null;
-    if (today.length >= cap) {
-      this.log("warn", `outbound guard: new-chat daily cap reached (${cap})`);
-      return Response.json(
-        {
-          ok: false,
-          error: `Daily limit for starting new chats reached (${cap}/day for this number). Messaging many people who never wrote to you first is the #1 cause of WhatsApp bans -- try again tomorrow, or reply to people who contact you.`,
-        },
-        { status: 429 }
-      );
-    }
-    today.push(jid);
-    const lastKey = await this.state.storage.get<string>("newchats:lastKey");
-    if (lastKey && lastKey !== key) await this.state.storage.delete(lastKey);
-    await this.state.storage.put({ [key]: today, "newchats:lastKey": key });
-    return null;
   }
 
   /** Should this number be kept online by the watchdog? Set when the
@@ -956,7 +890,7 @@ export class WhatsAppSession implements DurableObject {
         const linkPreview = await patrolLinkPreview(
           body.text, this.env.PATROL_LINK_PREVIEW_HOSTS, this.env.replyloom_patrol_images, socket.waUploadToServer,
         );
-        const outboundBlocked = await this.guardOutbound(jid, request);
+        const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;
         if (this.socket !== socket) {
           return Response.json({ ok: false, error: "Socket disconnected before sending.", hasSocket: false }, { status: 400 });
@@ -1119,7 +1053,7 @@ export class WhatsAppSession implements DurableObject {
           };
         }
 
-        const outboundBlocked = await this.guardOutbound(jid, request);
+        const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
 
@@ -1237,7 +1171,7 @@ export class WhatsAppSession implements DurableObject {
           content = { text: body.text };
         }
 
-        const outboundBlocked = await this.guardOutbound(jid, request);
+        const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
 
@@ -1840,7 +1774,7 @@ export class WhatsAppSession implements DurableObject {
         // arrived blank). We don't keep raw WAMessage protos around, only
         // the text body in D1, so forwarding is implemented as re-sending
         // that same content to the new recipient instead.
-        const outboundBlocked = await this.guardOutbound(jid, request);
+        const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;
         const result = body.text
           ? await this.socket.sendMessage(jid, { text: body.text })
@@ -1933,7 +1867,7 @@ export class WhatsAppSession implements DurableObject {
       try {
         let jid = body.to.includes("@") ? body.to : `${body.to}@s.whatsapp.net`;
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
-        const outboundBlocked = await this.guardOutbound(jid, request);
+        const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, {
           poll: {
@@ -1973,7 +1907,7 @@ export class WhatsAppSession implements DurableObject {
       try {
         let jid = body.to.includes("@") ? body.to : `${body.to}@s.whatsapp.net`;
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
-        const outboundBlocked = await this.guardOutbound(jid, request);
+        const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, {
           location: {
@@ -2012,7 +1946,7 @@ export class WhatsAppSession implements DurableObject {
       try {
         let jid = body.to.includes("@") ? body.to : `${body.to}@s.whatsapp.net`;
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
-        const outboundBlocked = await this.guardOutbound(jid, request);
+        const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, {
           contacts: {

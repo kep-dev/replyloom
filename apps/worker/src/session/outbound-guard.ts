@@ -7,9 +7,7 @@
 //
 // These don't make an unofficial client safe -- only the official WhatsApp
 // Business Platform is -- they stop this app from producing the patterns
-// WhatsApp flags most: bursts, lots of first messages to strangers, and
-// bot-to-bot reply loops.
-import { warmUpMultiplier } from "@workspace/db";
+// WhatsApp flags most: bursts and bot-to-bot reply loops.
 
 export type SendKind = "manual" | "api" | "broadcast" | "scheduled" | "auto";
 
@@ -82,18 +80,4 @@ export class AutoReplyLimiter {
     if (this.perContact.size > 5_000) this.perContact.clear();
     return true;
   }
-}
-
-/**
- * Daily cap on *new* chats: first messages to numbers that have never
- * written to this number. Scaled by the same warm-up tiers as broadcasts,
- * so a freshly linked number can't start messaging strangers at full rate.
- */
-export const BASE_NEW_CHATS_PER_DAY = 50;
-export function newChatDailyCap(sessionCreatedAt: Date | null | undefined, now = new Date()) {
-  return Math.max(5, Math.round(BASE_NEW_CHATS_PER_DAY * warmUpMultiplier(sessionCreatedAt, now)));
-}
-
-export function dayKey(now = new Date()) {
-  return now.toISOString().slice(0, 10);
 }

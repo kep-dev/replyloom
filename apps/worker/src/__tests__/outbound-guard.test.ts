@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AutoReplyLimiter, TokenBucket, newChatDailyCap, parseSendKind } from "../session/outbound-guard";
+import { AutoReplyLimiter, TokenBucket, parseSendKind } from "../session/outbound-guard";
 
 describe("outbound guard", () => {
   it("token bucket allows a burst, then paces", () => {
@@ -20,14 +20,6 @@ describe("outbound guard", () => {
     for (let i = 1; i <= 10; i++) if (l.allow("bot@s.whatsapp.net", t0 + i * 61_000)) allowed++;
     expect(allowed).toBe(5); // max 5 per hour per contact
     expect(l.allow("human@s.whatsapp.net", t0 + 5_000)).toBe(true); // other contacts unaffected
-  });
-
-  it("new-chat cap follows warm-up tiers", () => {
-    const now = new Date("2026-09-26T00:00:00Z");
-    const day = 24 * 60 * 60 * 1000;
-    expect(newChatDailyCap(new Date(now.getTime() - 1 * day), now)).toBe(5); // 10% of 50
-    expect(newChatDailyCap(new Date(now.getTime() - 60 * day), now)).toBe(50);
-    expect(newChatDailyCap(null, now)).toBe(5);
   });
 
   it("send kind can't be spoofed into something unknown", () => {

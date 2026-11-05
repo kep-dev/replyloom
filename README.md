@@ -158,7 +158,7 @@ The app pushes you toward sane behaviour, but it can't make an unofficial client
 
 - Broadcasts can only go to **contact lists**, with a per-campaign recipient ceiling, a warm-up daily cap for newly linked numbers, a per-contact cooldown, 15–45 s random gaps between sends, circuit breakers that stop on failure spikes, and required personalization.
 - **STOP / opt-out** replies (in several languages) suppress a contact workspace-wide.
-- **Every** outbound send is paced, first messages to new numbers are capped per day, and auto-replies have loop breakers.
+- **Every** outbound send is paced, and auto-replies have loop breakers.
 - The project will **not** add proxy/IP rotation, fingerprint spoofing or message-spinning to dodge WhatsApp's spam detection. PRs that do will be closed.
 
 If you need marketing or bulk messaging, use the official [WhatsApp Business Platform (Cloud API)](https://developers.facebook.com/docs/whatsapp/cloud-api), which has opt-in rules, approved templates and proper sending tiers.
@@ -185,7 +185,7 @@ Yes. The software is MIT-licensed and free, including for commercial use. You pa
 No. Replyloom links to WhatsApp as a *linked device* (like WhatsApp Web) through the unofficial Baileys library. That means no Meta business verification and no per-conversation fees, but WhatsApp can ban numbers that use unofficial clients. See [DISCLAIMER.md](./DISCLAIMER.md).
 
 ### Will my WhatsApp number get banned?
-It can happen with any unofficial client, and nobody can guarantee otherwise. Replyloom lowers the risk by pacing every outbound message, capping first contacts, honoring STOP replies and limiting broadcasts to opted-in lists. Don't use it for cold outreach or spam.
+It can happen with any unofficial client, and nobody can guarantee otherwise. Replyloom lowers the risk by pacing every outbound message, honoring STOP replies and limiting broadcasts to opted-in lists. Don't use it for cold outreach or spam.
 
 ### Can I connect multiple WhatsApp numbers?
 Yes. A workspace can link several numbers. Each runs in its own isolated Cloudflare Durable Object and stays connected 24/7, even with every browser tab closed.
