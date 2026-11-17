@@ -17,7 +17,6 @@
   "alias": {
     "ws": "./src/compat/ws-shim.ts"
   },
-  "images": { "binding": "replyloom_patrol_images" },
   "vars": {
     // Comma-separated HTTPS report hostnames eligible for patrol link previews.
     "PATROL_LINK_PREVIEW_HOSTS": "",

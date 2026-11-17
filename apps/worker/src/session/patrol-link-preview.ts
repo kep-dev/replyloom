@@ -1,14 +1,14 @@
 import { prepareWAMessageMedia } from "@whiskeysockets/baileys";
 import type { WAMediaUploadFunction, WAUrlInfo } from "@whiskeysockets/baileys";
 import { assertSafeOutboundUrlWithDns } from "../security";
+import { patrolThumbnails } from "./patrol-thumbnail";
+import type { PatrolThumbnails } from "./patrol-thumbnail";
 
 const PREVIEW_TIMEOUT_MS = 4_000;
 const LARGE_PREVIEW_TIMEOUT_MS = 6_000;
 const THUMBNAIL_UPLOAD_TIMEOUT_MS = 3_000;
 const MAX_HTML_BYTES = 128 * 1024;
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
-const MAX_THUMBNAIL_BYTES = 64 * 1024;
-const MAX_LARGE_THUMBNAIL_BYTES = 256 * 1024;
 const HTML_ENTITIES: Readonly<Record<string, string>> = {
   "&amp;": "&",
   "&quot;": '"',
@@ -73,22 +73,10 @@ async function readPreviewBytes(response: Response, mime: RegExp, limit: number)
   }
 }
 
-async function resizeJpeg(images: ImagesBinding, source: ArrayBuffer, size: number, limit: number): Promise<Buffer | null> {
-  const input = new Response(source);
-  if (!input.body) return null;
-  const transformed = await images.input(input.body)
-    .transform({ width: size, height: size, fit: "scale-down" })
-    .output({ format: "image/jpeg", quality: 70 });
-  const jpeg = await readPreviewBytes(transformed.response(), /^image\/jpeg$/, limit);
-  if (!jpeg) return null;
-  const header = new Uint8Array(jpeg, 0, Math.min(3, jpeg.byteLength));
-  return header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff ? Buffer.from(jpeg) : null;
-}
-
-type PatrolPreview = { preview: WAUrlInfo & { jpegThumbnail: Buffer }; source: ArrayBuffer };
+type PatrolPreview = { preview: WAUrlInfo & { jpegThumbnail: Buffer }; large: PatrolThumbnails["large"] };
 
 async function buildPreview(
-  report: URL, matchedText: string, images: ImagesBinding, signal: AbortSignal,
+  report: URL, matchedText: string, signal: AbortSignal,
 ): Promise<PatrolPreview | null> {
   const options: RequestInit = { redirect: "manual", cache: "no-store", signal };
   if (!(await assertSafeOutboundUrlWithDns(report.href, { timeoutMs: 1_000 })).ok) return null;
@@ -115,12 +103,12 @@ async function buildPreview(
   const source = await readPreviewBytes(await fetch(photo.href, options), /^image\/(?:jpeg|png|webp)$/, MAX_SOURCE_BYTES);
   if (!source) return null;
   signal.throwIfAborted();
-  const jpeg = await resizeJpeg(images, source, 320, MAX_THUMBNAIL_BYTES);
-  if (!jpeg || signal.aborted) return null;
+  const thumbnails = patrolThumbnails(source, signal);
+  if (!thumbnails || signal.aborted) return null;
 
   return {
-    preview: { "canonical-url": report.href, "matched-text": matchedText, title, jpegThumbnail: jpeg },
-    source,
+    preview: { "canonical-url": report.href, "matched-text": matchedText, title, jpegThumbnail: thumbnails.small },
+    large: thumbnails.large,
   };
 }
 
@@ -142,27 +130,17 @@ async function withPreviewTimeout<T>(work: (signal: AbortSignal) => Promise<T>, 
 }
 
 async function withUploadedThumbnail(
-  { preview, source }: PatrolPreview, images: ImagesBinding, upload: WAMediaUploadFunction,
+  { preview, large }: PatrolPreview, upload: WAMediaUploadFunction,
 ): Promise<WAUrlInfo> {
+  if (!large) return preview;
   return withPreviewTimeout(async signal => {
-    const largeJpeg = await resizeJpeg(images, source, 800, MAX_LARGE_THUMBNAIL_BYTES);
-    if (!largeJpeg) return preview;
-    signal.throwIfAborted();
-    const input = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(largeJpeg);
-        controller.close();
-      },
-    });
-    const size = await images.info(input);
-    if (!("width" in size) || !size.width || !size.height) return preview;
     signal.throwIfAborted();
     // Baileys uses the encrypted thumbnail reference to build the full-size link card.
     const { imageMessage } = await prepareWAMessageMedia({
-      image: largeJpeg,
+      image: large.jpeg,
       mimetype: "image/jpeg",
-      width: size.width,
-      height: size.height,
+      width: large.width,
+      height: large.height,
       jpegThumbnail: preview.jpegThumbnail.toString("base64"),
     }, {
       mediaTypeOverride: "thumbnail-link",
@@ -177,17 +155,17 @@ async function withUploadedThumbnail(
 }
 
 export async function patrolLinkPreview(
-  text: string, configuredHosts?: string, images?: ImagesBinding, upload?: WAMediaUploadFunction,
+  text: string, configuredHosts?: string, upload?: WAMediaUploadFunction,
 ): Promise<WAUrlInfo | null> {
-  if (!configuredHosts?.trim() || !images) return null;
+  if (!configuredHosts?.trim()) return null;
   const hosts = new Set(configuredHosts.split(",").map(host => host.trim().toLowerCase()));
   for (const [matchedText] of text.matchAll(/https:\/\/[^\s<>"]+/gi)) {
     const report = signedUrl(matchedText);
     if (!report || !hosts.has(report.hostname) || !/^\/result\/\d+$/.test(report.pathname)) continue;
 
-    const card = await withPreviewTimeout(signal => buildPreview(report, matchedText, images, signal), null, PREVIEW_TIMEOUT_MS);
+    const card = await withPreviewTimeout(signal => buildPreview(report, matchedText, signal), null, PREVIEW_TIMEOUT_MS);
     if (!card) return null;
-    return upload ? withUploadedThumbnail(card, images, upload) : card.preview;
+    return upload ? withUploadedThumbnail(card, upload) : card.preview;
   }
   return null;
 }

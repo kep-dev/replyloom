@@ -2,8 +2,10 @@ import { generateWAMessageContent } from "@whiskeysockets/baileys";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { assertSafeOutboundUrlWithDns } from "../security";
 import { patrolLinkPreview } from "../session/patrol-link-preview";
+import { patrolThumbnails } from "../session/patrol-thumbnail";
 
 vi.mock("../security", () => ({ assertSafeOutboundUrlWithDns: vi.fn() }));
+vi.mock("../session/patrol-thumbnail", () => ({ patrolThumbnails: vi.fn() }));
 
 const host = "patrol.example.com";
 const report = "https://" + host + "/result/42?signature=" + "a".repeat(64);
@@ -29,17 +31,11 @@ function mockReport(imageUrl: string) {
   });
 }
 
-function mockImages() {
-  const response = vi.fn(() => new Response(jpeg, { headers: { "content-type": "image/jpeg" } }));
-  const output = vi.fn().mockResolvedValue({ response });
-  const transform = vi.fn(() => ({ output }));
-  const input = vi.fn(() => ({ transform }));
-  const info = vi.fn().mockResolvedValue({ format: "image/jpeg", width: 800, height: 600 });
-  return { binding: { input, info } as unknown as ImagesBinding, input, transform, output, response };
-}
-
 beforeEach(() => {
   vi.mocked(assertSafeOutboundUrlWithDns).mockResolvedValue({ ok: true, url: new URL(report), resolvedIps: [] });
+  vi.mocked(patrolThumbnails).mockReturnValue({
+    small: Buffer.from(jpeg), large: { jpeg: Buffer.from(jpeg), width: 800, height: 600 },
+  });
   mockReport(photo);
 });
 
@@ -56,8 +52,7 @@ describe("patrol link preview", () => {
       .mockResolvedValueOnce(new Response(new Uint8Array(80 * 1024), { headers: { "content-type": "image/jpeg" } }));
     vi.stubGlobal("fetch", fetch);
 
-    const images = mockImages();
-    const linkPreview = await patrolLinkPreview(text, host, images.binding);
+    const linkPreview = await patrolLinkPreview(text, host);
     const message = await generateWAMessageContent({ text, linkPreview }, { upload: vi.fn() });
     expect(message.extendedTextMessage).toMatchObject({
       title: "Hasil Patroli - Area A & B",
@@ -67,8 +62,7 @@ describe("patrol link preview", () => {
     });
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([report, photo]);
     expect(vi.mocked(assertSafeOutboundUrlWithDns).mock.calls.map(([url]) => url)).toEqual([report, photo]);
-    expect(images.transform).toHaveBeenCalledWith({ width: 320, height: 320, fit: "scale-down" });
-    expect(images.output).toHaveBeenCalledWith({ format: "image/jpeg", quality: 70 });
+    expect(patrolThumbnails).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][1].redirect).toBe("manual");
     expect(fetch.mock.calls[1][1].signal).toBe(fetch.mock.calls[0][1].signal);
   });
@@ -80,12 +74,10 @@ describe("patrol link preview", () => {
       mediaUrl: "https://cdn.example.com/thumbnail",
       directPath: "/thumbnail",
     });
-    const images = mockImages();
-    const linkPreview = await patrolLinkPreview(text, host, images.binding, upload);
+    const linkPreview = await patrolLinkPreview(text, host, upload);
     const message = await generateWAMessageContent({ text, linkPreview }, { upload: vi.fn() });
     expect(upload).toHaveBeenCalledTimes(1);
-    expect(images.transform).toHaveBeenNthCalledWith(1, { width: 320, height: 320, fit: "scale-down" });
-    expect(images.transform).toHaveBeenNthCalledWith(2, { width: 800, height: 800, fit: "scale-down" });
+    expect(patrolThumbnails).toHaveBeenCalledTimes(1);
     expect(message.extendedTextMessage).toMatchObject({
       thumbnailDirectPath: "/thumbnail",
       thumbnailWidth: 800,
@@ -100,7 +92,7 @@ describe("patrol link preview", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(html())
       .mockResolvedValueOnce(new Response(jpeg, { headers: { "content-type": "image/jpeg" } })));
     const upload = vi.fn().mockRejectedValue(new Error("upload failed"));
-    const preview = await patrolLinkPreview(text, host, mockImages().binding, upload);
+    const preview = await patrolLinkPreview(text, host, upload);
     expect(preview?.jpegThumbnail).toEqual(Buffer.from(jpeg));
     expect(preview?.highQualityThumbnail).toBeUndefined();
   });
@@ -108,7 +100,7 @@ describe("patrol link preview", () => {
   it.each([undefined, "", "other.example.com"])("skips fetches when the report host is disabled (%s)", async hosts => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
-    expect(await patrolLinkPreview(text, hosts, mockImages().binding)).toBeNull();
+    expect(await patrolLinkPreview(text, hosts)).toBeNull();
     expect(assertSafeOutboundUrlWithDns).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -119,14 +111,14 @@ describe("patrol link preview", () => {
       mockReport(imageUrl);
       const fetch = vi.fn().mockResolvedValueOnce(html());
       vi.stubGlobal("fetch", fetch);
-      expect(await patrolLinkPreview(text, host, mockImages().binding)).toBeNull();
+      expect(await patrolLinkPreview(text, host)).toBeNull();
       expect(fetch).toHaveBeenCalledTimes(1);
     });
 
   it("does not follow a report redirect", async () => {
     const fetch = vi.fn().mockResolvedValueOnce(Response.redirect(photo));
     vi.stubGlobal("fetch", fetch);
-    expect(await patrolLinkPreview(text, host, mockImages().binding)).toBeNull();
+    expect(await patrolLinkPreview(text, host)).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -142,28 +134,40 @@ describe("patrol link preview", () => {
     if (!reportTooLarge) fetch.mockResolvedValueOnce(html());
     fetch.mockResolvedValueOnce(oversized);
     vi.stubGlobal("fetch", fetch);
-    const images = mockImages();
-    expect(await patrolLinkPreview(text, host, images.binding)).toBeNull();
-    expect(images.input).not.toHaveBeenCalled();
+    expect(await patrolLinkPreview(text, host)).toBeNull();
+    expect(patrolThumbnails).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledTimes(reportTooLarge ? 1 : 2);
   });
 
-  it("falls back to text even if the image transformation stalls past the deadline", async () => {
+  it("falls back to text when the deadline expires while fetching a photo", async () => {
     const deadline = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
     const fetch = vi.fn().mockResolvedValueOnce(html())
-      .mockResolvedValueOnce(new Response(jpeg, { headers: { "content-type": "image/jpeg" } }));
+      .mockImplementationOnce(() => { deadline.abort(); return new Promise(() => {}); });
     vi.stubGlobal("fetch", fetch);
-    const images = mockImages();
-    images.output.mockImplementation(() => {
-      deadline.abort();
-      return new Promise(() => {});
-    });
-    const linkPreview = await patrolLinkPreview(text, host, images.binding);
+    const linkPreview = await patrolLinkPreview(text, host);
     expect(timeout).toHaveBeenCalledWith(4000);
     expect(linkPreview).toBeNull();
     const message = await generateWAMessageContent({ text, linkPreview }, { upload: vi.fn() });
     expect(message.extendedTextMessage).toMatchObject({ text });
     expect(message.extendedTextMessage?.jpegThumbnail).toBeUndefined();
+  });
+
+  it("falls back to text when the source cannot be decoded safely", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(html())
+      .mockResolvedValueOnce(new Response(jpeg, { headers: { "content-type": "image/jpeg" } })));
+    vi.mocked(patrolThumbnails).mockReturnValue(null);
+    expect(await patrolLinkPreview(text, host)).toBeNull();
+  });
+
+  it("keeps the compact card when the large JPEG exceeds its limit", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(html())
+      .mockResolvedValueOnce(new Response(jpeg, { headers: { "content-type": "image/jpeg" } })));
+    vi.mocked(patrolThumbnails).mockReturnValue({ small: Buffer.from(jpeg), large: null });
+    const upload = vi.fn();
+    const preview = await patrolLinkPreview(text, host, upload);
+    expect(preview?.jpegThumbnail).toEqual(Buffer.from(jpeg));
+    expect(preview?.highQualityThumbnail).toBeUndefined();
+    expect(upload).not.toHaveBeenCalled();
   });
 });

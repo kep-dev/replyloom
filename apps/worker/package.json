@@ -15,10 +15,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@cf-wasm/photon": "0.4.0",
     "@noble/ciphers": "^2.4.0",
     "@sentry/cloudflare": "^10.75.0",
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "@workspace/db": "workspace:*",
+    "image-size": "2.1.0",
     "pino": "^9.6.0",
     "qrcode": "^1.5.4",
     "zod": "^4.6.5"

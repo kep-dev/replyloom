@@ -888,7 +888,7 @@ export class WhatsAppSession implements DurableObject {
         // The router already authorized the session. Finish optional network I/O
         // before taking a pacing token so delayed previews cannot bunch sends.
         const linkPreview = await patrolLinkPreview(
-          body.text, this.env.PATROL_LINK_PREVIEW_HOSTS, this.env.replyloom_patrol_images, socket.waUploadToServer,
+          body.text, this.env.PATROL_LINK_PREVIEW_HOSTS, socket.waUploadToServer,
         );
         const outboundBlocked = await this.guardOutbound(request);
         if (outboundBlocked) return outboundBlocked;

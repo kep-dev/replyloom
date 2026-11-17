@@ -121,6 +121,17 @@ Then, before the first deploy:
 
 Both scripts are idempotent. [DEPLOY.md](./DEPLOY.md) covers every step by hand, plus multiple environments, backups, custom domains and monitoring.
 
+Patrol link previews are optional: set the engine's `PATROL_LINK_PREVIEW_HOSTS`
+to a comma-separated allowlist of report hostnames (empty disables them). The
+engine reads signed `/result/{id}` pages and their first public patrol photo;
+no ERP change or Cloudflare Images binding is required. Photon WebAssembly
+creates JPEGs at up to 320 and 800 pixels, preserving aspect ratio and EXIF
+orientation. Inputs are limited to 2 MiB and four million pixels; outputs to
+64 and 256 KiB. Preview failures fall back to the original text and link.
+Benchmark the complete engine bundle before rollout: image decoding shares
+memory and CPU with the WhatsApp session, and the input ceiling alone does
+not guarantee a suitable memory margin for a live session.
+
 ## Known limitations
 
 - **Single D1 database.** Every workspace shares one D1 database (hot paths are indexed and keyset-paginated). That's fine for small and medium deployments, but it hasn't been load-tested at large scale. Per-workspace sharding is on the roadmap.
